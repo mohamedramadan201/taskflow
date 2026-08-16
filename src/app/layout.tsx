@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import type { Viewport } from "next";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
 import "./readability.css";
 
@@ -10,13 +13,20 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: "TaskFlow — Clear work, faster teams", description: "Manage tasks and workspaces with clear permissions and reliable reminders.", images: ["/og.png"] },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#163f35",
+};
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en" dir="ltr"
       className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col"><PwaRegister /><PwaInstallPrompt />{children}</body>
     </html>
   );
 }
