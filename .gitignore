@@ -30,8 +30,15 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# local runtime logs and email delivery records
+/var/
+
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# generated Prisma client
+/src/generated/prisma
 
 # vercel
 .vercel

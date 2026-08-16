@@ -1,0 +1,87 @@
+/** TaskFlow Gmail metadata connector. Requires the Advanced Gmail service (v1). */
+var TASKFLOW_KEYS = { baseUrl: "TASKFLOW_BASE_URL", connectorId: "TASKFLOW_CONNECTOR_ID", token: "TASKFLOW_CONNECTOR_TOKEN" };
+
+function configureTaskFlow() {
+  var properties = PropertiesService.getScriptProperties();
+  var missing = Object.keys(TASKFLOW_KEYS).filter(function(key) { return !properties.getProperty(TASKFLOW_KEYS[key]); });
+  if (missing.length) throw new Error("Missing Script Properties: " + missing.map(function(key) { return TASKFLOW_KEYS[key]; }).join(", ") + ". Open Project Settings, add the three TaskFlow Script Properties, then run configureTaskFlow again.");
+  var result = testTaskFlowConnection();
+  installTaskFlowTrigger();
+  return result;
+}
+
+function installTaskFlowTrigger() {
+  ScriptApp.getProjectTriggers().filter(function(trigger) { return trigger.getHandlerFunction() === "syncTaskFlow"; }).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
+  ScriptApp.newTrigger("syncTaskFlow").timeBased().everyMinutes(1).create();
+}
+
+function testTaskFlowConnection() { return taskflowRequest_("sync-config", "get"); }
+
+function syncTaskFlow() {
+  var config;
+  try {
+    config = taskflowRequest_("sync-config", "get");
+    if (!config.enabled || !config.shouldSync) return;
+    if (!config.historyId) {
+      var profile = Gmail.Users.getProfile("me");
+      taskflowRequest_("ingest", "post", { historyId: String(profile.historyId), emails: [] });
+      return;
+    }
+    var changes = gmailChangesSince_(config.historyId);
+    var messages = changes.messageIds.map(gmailMetadata_).filter(function(item) { return item && passesRules_(item, config.mailboxAddress, config.filters); });
+    if (!messages.length) { taskflowRequest_("ingest", "post", { historyId: changes.historyId, emails: [] }); return; }
+    for (var offset = 0; offset < messages.length; offset += 50) {
+      var isLast = offset + 50 >= messages.length;
+      taskflowRequest_("ingest", "post", { historyId: isLast ? changes.historyId : undefined, emails: messages.slice(offset, offset + 50) });
+    }
+  } catch (error) {
+    try { taskflowRequest_("ingest", "post", { historyId: config && config.historyId, emails: [], error: String(error && error.message || error).slice(0, 500) }); } catch (_) {}
+    throw error;
+  }
+}
+
+function gmailChangesSince_(historyId) {
+  var ids = {}, pageToken, latestHistoryId = historyId;
+  try {
+    do {
+      var response = Gmail.Users.History.list("me", { startHistoryId: historyId, historyTypes: ["messageAdded"], labelId: "INBOX", maxResults: 500, pageToken: pageToken });
+      (response.history || []).forEach(function(entry) { (entry.messagesAdded || []).forEach(function(added) { if (added.message && added.message.id) ids[added.message.id] = true; }); });
+      latestHistoryId = String(response.historyId || latestHistoryId); pageToken = response.nextPageToken;
+    } while (pageToken);
+  } catch (error) {
+    if (!/404|not found/i.test(String(error))) throw error;
+    var recent = Gmail.Users.Messages.list("me", { labelIds: ["INBOX"], maxResults: 100 });
+    (recent.messages || []).forEach(function(message) { ids[message.id] = true; });
+    latestHistoryId = String(Gmail.Users.getProfile("me").historyId);
+  }
+  return { messageIds: Object.keys(ids), historyId: latestHistoryId };
+}
+
+function gmailMetadata_(id) {
+  var message = Gmail.Users.Messages.get("me", id, { format: "metadata", metadataHeaders: ["From", "To", "Cc", "Delivered-To", "X-Original-To", "Subject", "Message-ID"] });
+  var labels = message.labelIds || [];
+  if (labels.indexOf("INBOX") < 0 || ["SPAM", "TRASH", "DRAFT", "SENT"].some(function(label) { return labels.indexOf(label) >= 0; })) return null;
+  var headers = {}; ((message.payload && message.payload.headers) || []).forEach(function(header) { var key = header.name.toLowerCase(); (headers[key] || (headers[key] = [])).push(header.value); });
+  var from = parseAddresses_((headers.from || []).join(","))[0]; if (!from) return null;
+  return { gmailMessageId: message.id, gmailThreadId: message.threadId, internetMessageId: first_(headers["message-id"]), senderAddress: from.address, senderName: from.name || null, toAddresses: addressValues_(headers.to), ccAddresses: addressValues_(headers.cc), deliveredTo: addressValues_((headers["delivered-to"] || []).concat(headers["x-original-to"] || [])), subject: first_(headers.subject) || "(No subject)", snippet: String(message.snippet || "").slice(0, 1000), receivedAt: new Date(Number(message.internalDate)).toISOString() };
+}
+
+function addressValues_(values) { return parseAddresses_((values || []).join(",")).map(function(item) { return item.address; }); }
+function parseAddresses_(value) { var found = [], regex = /(?:"?([^"<,]+)"?\s*)?<([^<>\s]+@[^<>\s]+)>|([^\s,<>]+@[^\s,<>]+)/g, match; while ((match = regex.exec(value || ""))) found.push({ name: String(match[1] || "").trim(), address: String(match[2] || match[3]).toLowerCase() }); return found; }
+function first_(values) { return values && values.length ? values[0] : null; }
+function ruleMatches_(address, rule) { address = String(address || "").toLowerCase(); var value = String(rule.value || "").toLowerCase().replace(/^@/, ""); return rule.matchType === "EXACT" ? address === value : address.slice(address.lastIndexOf("@") + 1) === value; }
+function passesRules_(email, mailbox, rules) { var recipients = email.toAddresses.concat(email.ccAddresses, email.deliveredTo, [mailbox]); var byField = { SENDER: [email.senderAddress], RECIPIENT: recipients }; return ["SENDER", "RECIPIENT"].every(function(field) { var fieldRules = (rules || []).filter(function(rule) { return rule.field === field; }); if (fieldRules.some(function(rule) { return rule.action === "EXCLUDE" && byField[field].some(function(address) { return ruleMatches_(address, rule); }); })) return false; var includes = fieldRules.filter(function(rule) { return rule.action === "INCLUDE"; }); return !includes.length || includes.some(function(rule) { return byField[field].some(function(address) { return ruleMatches_(address, rule); }); }); }); }
+
+function taskflowRequest_(path, method, body) {
+  var properties = PropertiesService.getScriptProperties(), baseUrl = properties.getProperty(TASKFLOW_KEYS.baseUrl), connectorId = properties.getProperty(TASKFLOW_KEYS.connectorId), token = properties.getProperty(TASKFLOW_KEYS.token);
+  if (!baseUrl || !connectorId || !token) throw new Error("TaskFlow connector is not configured.");
+  baseUrl = String(baseUrl).trim().replace(/\/+$/, "");
+  if (!/^https:\/\//i.test(baseUrl) || /^https:\/\/(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(baseUrl)) {
+    throw new Error("TASKFLOW_BASE_URL must be a public HTTPS URL. localhost and private network addresses cannot be reached by Google Apps Script. Deploy TaskFlow or use a secure public tunnel, then update this Script Property.");
+  }
+  var options = { method: method, headers: { "x-taskflow-connector-token": token }, muteHttpExceptions: true };
+  if (body) { options.contentType = "application/json"; options.payload = JSON.stringify(body); }
+  var response = UrlFetchApp.fetch(baseUrl + "/api/email-connectors/" + encodeURIComponent(connectorId) + "/" + path, options), code = response.getResponseCode(), text = response.getContentText();
+  if (code < 200 || code >= 300) throw new Error("TaskFlow returned " + code + ": " + text.slice(0, 300));
+  return text ? JSON.parse(text) : {};
+}
