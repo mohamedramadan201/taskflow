@@ -50,5 +50,11 @@ export async function requireWorkspaceBySlug(slug: string, authenticatedUser?: {
 export function errorResponse(error: unknown) {
   if (error instanceof Response) return error;
   const status = error instanceof HttpError ? error.status : 500;
+  if (status === 500) {
+    console.error("[TaskFlow API] Unexpected server error", error);
+    if (process.env.NODE_ENV === "development") {
+      return Response.json({ error: error instanceof Error ? error.message : "Unexpected server error" }, { status });
+    }
+  }
   return Response.json({ error: status === 500 ? "Unexpected server error" : (error as Error).message }, { status });
 }
