@@ -21,12 +21,13 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
+  const developmentServiceWorkerCleanup = process.env.NODE_ENV !== "production" ? "if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(function (registrations) { registrations.forEach(function (registration) { registration.unregister(); }); }); if ('caches' in window) { caches.keys().then(function (keys) { keys.filter(function (key) { return key.indexOf('taskflow-shell-') === 0; }).forEach(function (key) { caches.delete(key); }); }); } }" : "";
   return (
     <html
       lang="en" dir="ltr"
       className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col"><PwaRegister /><PwaInstallPrompt />{children}</body>
+      <body className="min-h-full flex flex-col">{developmentServiceWorkerCleanup && <script dangerouslySetInnerHTML={{ __html: developmentServiceWorkerCleanup }} />}<PwaRegister /><PwaInstallPrompt />{children}</body>
     </html>
   );
 }
