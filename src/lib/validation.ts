@@ -59,7 +59,12 @@ export const inboundEmailSchema = z.object({
 export const emailIngestSchema = z.object({
   historyId: z.string().max(100).optional().nullable(), emails: z.array(inboundEmailSchema).max(50), error: z.string().trim().max(500).optional().nullable(),
 });
-export const emailActionSchema = z.object({ status: z.enum(["UNTRIAGED", "DISMISSED"]) });
+export const emailActionSchema = z.object({ status: z.enum(["UNTRIAGED", "DISMISSED", "NO_ACTION_NEEDED"]) });
+export const emailBulkActionSchema = z.object({
+  emailIds: z.array(z.string().min(1)).min(1).max(100),
+  action: z.enum(["DISMISS", "NO_ACTION_NEEDED", "RESTORE", "ASSIGN"]),
+  assigneeUserId: z.string().min(1).optional().nullable(),
+});
 export const emailConvertSchema = z.object({
   title: z.string().trim().min(1).max(120), description: z.string().trim().max(2000).optional().nullable(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"), dueAt: z.string().datetime().optional().nullable(),

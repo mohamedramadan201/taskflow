@@ -61,6 +61,7 @@ enum InboundEmailStatus {
   UNTRIAGED
   CONVERTED
   DISMISSED
+  NO_ACTION_NEEDED
 }
 
 enum EmailFilterAction {

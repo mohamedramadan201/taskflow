@@ -1,0 +1,1 @@
+ALTER TYPE "InboundEmailStatus" ADD VALUE 'NO_ACTION_NEEDED';
