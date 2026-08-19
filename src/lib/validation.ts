@@ -6,6 +6,7 @@ export const taskInputSchema = z.object({
   workspaceId: z.string().min(1), title: z.string().trim().min(1).max(120), description: z.string().trim().max(2000).optional().nullable(),
   status: z.enum(["TODO", "IN_PROGRESS", "DONE", "NO_ACTION_NEEDED"]).optional(), priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
   dueAt: z.string().datetime().optional().nullable(), assigneeUserId: z.string().min(1).optional().nullable(),
+  followUpWith: z.string().trim().max(120).optional().nullable(),
   recurrence: z.enum(["NONE", "DAILY", "WEEKLY", "MONTHLY"]).optional(), recurrenceInterval: z.number().int().min(1).max(365).optional(),
   updatedProductsCount: optionalTaskCountSchema, newProductsCount: optionalTaskCountSchema,
   updatedImagesCount: optionalTaskCountSchema, newImagesCount: optionalTaskCountSchema,
@@ -31,6 +32,7 @@ export const taskFilterSchema = z.object({
   dueFrom: z.string().max(10).default(""), dueTo: z.string().max(10).default(""),
   completed: z.enum(["all", "today", "this-week", "this-month"]).default("all"),
   recurrence: z.enum(["all", "recurring", "not-recurring"]).default("all"),
+  followUpWith: z.string().max(120).default(""),
   labels: z.array(z.string().min(1)).max(20).default([]),
   attention: z.boolean().default(false), mineOnly: z.boolean().default(false),
 });
