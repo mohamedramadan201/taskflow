@@ -527,3 +527,60 @@ button:disabled { cursor: not-allowed; opacity: .58; }
   .more-filters-panel { position:relative; top:auto; right:auto; width:auto; margin-top:8px; padding:10px; }
   .more-filter-grid { grid-template-columns:1fr!important; }
 }
+
+/* Compact task details and keep board controls on one command rail. */
+.command-view-toolbar { margin-left:auto; }
+.command-view-toolbar .view-switcher { margin:0; }
+.bulk-task-toolbar { justify-content:flex-start; gap:8px; margin:8px 0 0; padding:6px 8px; }
+.bulk-selection-summary { gap:6px; font-size:11px; }
+.bulk-selection-summary strong { font-size:15px; }
+.bulk-action-controls { margin-left:auto; gap:6px; }
+.bulk-action-controls select, .bulk-date-action { min-height:30px; padding:5px 7px; font-size:11px; }
+
+body .detail-assignment-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+body .task-count-section { margin:0; padding:9px; }
+body .task-count-section > summary { margin-bottom:6px; }
+body .task-count-options { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; }
+body .task-count-field { display:grid; gap:3px; min-width:0; }
+body .task-count-field > span { overflow:hidden; color:var(--muted); font-size:10px; font-weight:800; text-overflow:ellipsis; white-space:nowrap; }
+body .task-count-field .task-count-input { min-height:30px; padding:5px 7px; font-size:11px; }
+
+@media (min-width:701px) {
+  body .task-drawer { width:min(1040px, calc(100vw - 32px)); max-height:calc(100vh - 28px); padding:17px 20px; overflow:hidden; }
+  body .task-detail-header { gap:12px; }
+  body .task-detail-header h2 { margin:2px 0 0; font-size:20px; }
+  body .task-detail-header .priority { margin-top:8px; }
+  body .task-detail-layout { grid-template-columns:minmax(0, 1.35fr) minmax(280px, .8fr); gap:15px; }
+  body .task-detail-main, body .task-detail-side { overflow:visible; padding-right:0; }
+  body .detail-form, body .detail-form fieldset { gap:6px; }
+  body .detail-form label { gap:3px; font-size:10px; }
+  body .detail-form input, body .detail-form textarea, body .detail-form select { padding:6px 8px; font-size:11px; }
+  body .detail-form textarea { min-height:43px; }
+  body .detail-form .detail-grid { gap:6px; }
+  body .work-planning-section, body .blocker-section { gap:6px; padding:8px; }
+  body .drawer-section { margin-top:6px; padding-top:6px; }
+  body .drawer-details { gap:6px; }
+  body .drawer-details > summary strong { font-size:11px; }
+  body .drawer-details > summary small { font-size:9px; }
+  body .drawer-labels { gap:4px; margin-top:5px; }
+  body .drawer-labels label { font-size:10px; }
+  body .checklist-item { padding:3px 0; font-size:10px; }
+  body .comment { padding:6px; margin:4px 0; }
+  body .comment p { margin:3px 0; font-size:10px; }
+  body .comment-form { gap:4px; margin-top:5px; }
+  body .comment-form textarea { min-height:38px; padding:6px 8px; font-size:11px; }
+  body .task-detail-main .primary-button { padding:7px 10px; }
+  body .task-detail-side .activity-row { margin:3px 0; font-size:10px; }
+}
+
+@media (max-width:700px) {
+  .command-view-toolbar { grid-column:1 / -1; width:100%; margin:0; }
+  .command-view-toolbar .view-switcher { width:100%; margin:0; }
+  .command-view-toolbar .view-switcher button { flex:1; min-height:36px; padding:7px 8px; }
+  .bulk-task-toolbar { gap:7px; margin-top:8px; padding:8px; }
+  .bulk-action-controls { width:100%; margin-left:0; }
+  .bulk-action-controls > *, .bulk-action-controls select, .bulk-date-action { flex:1 1 45%; min-width:0; }
+  body .detail-assignment-grid { grid-template-columns:1fr 1fr; }
+  body .task-count-options { grid-template-columns:1fr 1fr; }
+  body .task-drawer { overflow:auto; }
+}
