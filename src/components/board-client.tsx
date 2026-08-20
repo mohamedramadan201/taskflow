@@ -3,27 +3,15 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { BulkTaskToolbar, type BulkAction } from "@/components/bulk-task-toolbar";
 import { ManagerActionCenter } from "@/components/manager-action-center";
+import { TaskDrawer } from "@/components/task-drawer";
 import type { ManagerActionRisk } from "@/lib/reporting";
+import { taskStatuses, priority, toggleValue, personName, type ChecklistItem, type Label, type Member, type Task, type TaskCountKey, type TaskDetail } from "@/components/board-types";
 
-type Member = { role: string; teamGroupId: string | null; teamGroup: { id: string; name: string } | null; user: { id: string; name: string | null; email: string } };
-type Label = { id: string; name: string; color: string };
-type TaskCountKey = "updatedProductsCount" | "newProductsCount" | "updatedImagesCount" | "newImagesCount";
-type Task = { id: string; title: string; description: string | null; status: string; priority: string; dueAt: string | Date | null; startedAt: string | Date | null; completedAt: string | Date | null; createdAt?: string | Date; updatedAt?: string | Date; estimatedMinutes: number | null; remainingMinutes: number | null; actualMinutes: number | null; blockedAt: string | Date | null; blockedReason: string | null; blockerTaskId: string | null; recurrence: string; recurrenceInterval: number; updatedProductsCount: number | null; newProductsCount: number | null; updatedImagesCount: number | null; newImagesCount: number | null; createdByUserId: string; assigneeUserId: string | null; followUpWith: string | null; assignee: { id: string; name: string | null; email: string } | null; labels: Label[] };
-type ChecklistItem = { id: string; title: string; completed: boolean; position: number };
-type TaskDetail = Task & { blockerTask?: { id: string; title: string; status: string } | null; sourceEmails?: { id: string; subject: string; senderAddress: string; receivedAt: string; connector: { mailboxAddress: string } }[]; createdBy: { id: string; name: string | null; email: string }; checklistItems: ChecklistItem[]; comments: { id: string; body: string; createdAt: string; author: { id: string; name: string | null; email: string } }[]; activities: { id: string; type: string; createdAt: string; actor: { name: string | null; email: string } }[] };
 type FilterState = { query: string; statuses: string[]; priorities: string[]; assignees: string[]; creator: string; due: string; dueFrom: string; dueTo: string; completed: string; recurrence: string; followUpWith: string; teamGroupId: string; labels: string[]; attention: boolean; mineOnly: boolean };
 type SavedView = { id: string; userId: string; name: string; shared: boolean; filters: unknown };
 type ViewMode = "board" | "list" | "calendar";
 
-const taskStatuses = [["TODO", "To do"], ["IN_PROGRESS", "In progress"], ["DONE", "Completed"], ["NO_ACTION_NEEDED", "No Action Needed"]] as const;
 const boardColumns = taskStatuses.slice(0, 3);
-const priority: Record<string, string> = { LOW: "Low", MEDIUM: "Medium", HIGH: "High", URGENT: "Urgent" };
-const taskCountOptions: ReadonlyArray<{ key: TaskCountKey; label: string }> = [
-  { key: "updatedProductsCount", label: "Updated Products Count" },
-  { key: "newProductsCount", label: "New Products Count" },
-  { key: "updatedImagesCount", label: "Updated Images Count" },
-  { key: "newImagesCount", label: "New Images Count" },
-];
 const emptyFilters: FilterState = { query: "", statuses: [], priorities: [], assignees: [], creator: "all", due: "all", dueFrom: "", dueTo: "", completed: "all", recurrence: "all", followUpWith: "", teamGroupId: "", labels: [], attention: false, mineOnly: false };
 type ActionCenterData = { total: number; counts: Record<ManagerActionRisk, number>; taskIds: Record<Exclude<ManagerActionRisk, "overloaded">, string[]>; overloadedMemberIds: string[] };
 
@@ -34,8 +22,6 @@ function startOfWeek(value: Date) { const date = startOfDay(value); date.setDate
 function inRange(value: string | Date, from: Date, to: Date) { const time = new Date(value).getTime(); return time >= from.getTime() && time < to.getTime(); }
 function buildCalendarDays(month: Date) { const first = new Date(month.getFullYear(), month.getMonth(), 1); const start = addDays(first, -first.getDay()); return Array.from({ length: 42 }, (_, index) => addDays(start, index)); }
 function normalizeFilters(value: unknown): FilterState { if (!value || typeof value !== "object") return { ...emptyFilters }; const raw = value as Partial<FilterState>; return { ...emptyFilters, ...raw, statuses: raw.statuses ?? [], priorities: raw.priorities ?? [], assignees: raw.assignees ?? [], labels: raw.labels ?? [] }; }
-function toggleValue(items: string[], value: string) { return items.includes(value) ? items.filter((item) => item !== value) : [...items, value]; }
-function personName(member: Member) { return member.user.name || member.user.email; }
 function dueLabel(value: string | Date | null, done = false) { if (!value) return null; const date = new Date(value); const overdue = !done && date.getTime() < Date.now(); return <span className={overdue ? "due-date overdue" : "due-date"}>{overdue ? "Overdue" : "Due"} {date.toLocaleDateString()}</span>; }
 function needsAttention(task: Task, now = new Date()) { if (task.status === "NO_ACTION_NEEDED") return false; const overdue = !!task.dueAt && task.status !== "DONE" && new Date(task.dueAt) < now; const soon = !!task.dueAt && task.status !== "DONE" && inRange(task.dueAt, now, addDays(now, 2)); const stalled = task.status === "IN_PROGRESS" && !task.dueAt; return overdue || soon || task.priority === "URGENT" || !task.assigneeUserId || stalled || Boolean(task.blockedAt || task.blockerTaskId) || !task.estimatedMinutes; }
 
@@ -43,7 +29,10 @@ function MultiFilter({ id, label, count, open, onToggle, children }: { id: strin
   return <div className={`filter-menu ${open ? "open" : ""}`}><button type="button" className="filter-trigger" aria-expanded={open} aria-controls={`${id}-menu`} onClick={onToggle}><span>{label}</span>{count > 0 && <strong>{count}</strong>}<span className="chevron" aria-hidden="true">⌄</span></button>{open && <div className="filter-popover" id={`${id}-menu`} role="group" aria-label={`${label} options`}><div className="filter-popover-heading"><strong>{label}</strong><span>{count ? `${count} selected` : "Select one or more"}</span></div>{children}</div>}</div>;
 }
 
-export function BoardClient({ initialTasks, members, role, canManageWorkspace: canManageWorkspaceProp, managerActionCenter, workspaceId, currentUserId, initialLabels, initialSavedViews }: { initialTasks: Task[]; members: Member[]; role: string; canManageWorkspace: boolean; managerActionCenter: ActionCenterData; workspaceId: string; currentUserId: string; initialLabels: Label[]; initialSavedViews: SavedView[] }) {
+const COLUMN_RENDER_BATCH = 60;
+const LIST_RENDER_BATCH = 150;
+
+export function BoardClient({ initialTasks, totalTaskCount, members, role, canManageWorkspace: canManageWorkspaceProp, managerActionCenter, workspaceId, currentUserId, initialLabels, initialSavedViews }: { initialTasks: Task[]; totalTaskCount?: number; members: Member[]; role: string; canManageWorkspace: boolean; managerActionCenter: ActionCenterData; workspaceId: string; currentUserId: string; initialLabels: Label[]; initialSavedViews: SavedView[] }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [labels, setLabels] = useState(initialLabels);
   const [savedViews, setSavedViews] = useState(initialSavedViews);
@@ -70,6 +59,17 @@ export function BoardClient({ initialTasks, members, role, canManageWorkspace: c
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
   const [loadingTaskId, setLoadingTaskId] = useState<string | null>(null);
+  const [debouncedQuery, setDebouncedQuery] = useState(filters.query);
+  // Board card order within a column is a per-browser preference, not shared team state, so it
+  // lives in localStorage rather than the database. Read it lazily (not in an effect) so the
+  // very first client render already reflects it instead of flashing the default order.
+  const [columnOrder, setColumnOrder] = useState<Record<string, string[]>>(() => {
+    if (typeof window === "undefined") return {};
+    try { const raw = window.localStorage.getItem(`taskflow.board-order.${workspaceId}`); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
+  });
+  const [columnRenderCounts, setColumnRenderCounts] = useState<Record<string, number>>({});
+  const [listRenderCount, setListRenderCount] = useState(LIST_RENDER_BATCH);
+  const [undoAction, setUndoAction] = useState<{ label: string; run: () => Promise<void> } | null>(null);
   const detailCache = useRef(new Map<string, Promise<TaskDetail>>());
   const pointerDrag = useRef<{ taskId: string; startX: number; startY: number; active: boolean; status: string | null } | null>(null);
   const suppressCardClick = useRef(false);
@@ -126,11 +126,31 @@ export function BoardClient({ initialTasks, members, role, canManageWorkspace: c
     };
   }, [selected?.id]);
 
+  // Debounce the search box so typing doesn't re-filter the full task list on every keystroke.
+  useEffect(() => { const timer = window.setTimeout(() => setDebouncedQuery(filters.query), 200); return () => window.clearTimeout(timer); }, [filters.query]);
+
+  function persistColumnOrder(next: Record<string, string[]>) { setColumnOrder(next); try { window.localStorage.setItem(`taskflow.board-order.${workspaceId}`, JSON.stringify(next)); } catch { /* storage unavailable */ } }
+
+  // Changing filters changes which cards are on screen, so drop any "show more" progress rather
+  // than let a stale render count hide newly-matching cards. This adjusts state directly during
+  // render (React's recommended pattern for state that depends on a prop/state change) instead
+  // of an effect, so it happens in the same render pass rather than one render behind.
+  const filterSignature = JSON.stringify(filters) + "|" + riskFilter;
+  const [lastFilterSignature, setLastFilterSignature] = useState(filterSignature);
+  if (lastFilterSignature !== filterSignature) {
+    setLastFilterSignature(filterSignature);
+    setColumnRenderCounts({});
+    setListRenderCount(LIST_RENDER_BATCH);
+  }
+
   const visibleTasks = useMemo(() => {
     const now = new Date(); const today = startOfDay(now); const tomorrow = addDays(today, 1); const dayAfterTomorrow = addDays(today, 2); const weekStart = startOfWeek(now); const nextWeek = addDays(weekStart, 7); const followingWeek = addDays(weekStart, 14); const monthStart = new Date(now.getFullYear(), now.getMonth(), 1); const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const memberTeamGroups = new Map(members.map((member) => [member.user.id, member.teamGroupId]));
     return tasks.filter((task) => {
-      if (filters.query && !`${task.title} ${task.description || ""}`.toLowerCase().includes(filters.query.toLowerCase())) return false;
+      if (debouncedQuery) {
+        const haystack = [task.title, task.description || "", task.assignee?.name, task.assignee?.email, task.followUpWith, ...task.labels.map((label) => label.name)].filter(Boolean).join(" ").toLowerCase();
+        if (!haystack.includes(debouncedQuery.toLowerCase())) return false;
+      }
       if (filters.statuses.length && !filters.statuses.includes(task.status)) return false;
       if (filters.priorities.length && !filters.priorities.includes(task.priority)) return false;
       if (filters.assignees.length && !filters.assignees.some((id) => id === "__unassigned__" ? !task.assigneeUserId : task.assigneeUserId === id)) return false;
@@ -166,8 +186,33 @@ export function BoardClient({ initialTasks, members, role, canManageWorkspace: c
       if (filters.attention && !needsAttention(task, now)) return false;
       return true;
     });
-  }, [tasks, filters, currentUserId, members, managerActionCenter, riskFilter]);
+  }, [tasks, filters, debouncedQuery, currentUserId, members, managerActionCenter, riskFilter]);
   const grouped = useMemo(() => Object.fromEntries(boardColumns.map(([key]) => [key, visibleTasks.filter((task) => task.status === key)])), [visibleTasks]);
+  function orderedColumnTasks(status: string, columnTasks: Task[]) {
+    const order = columnOrder[status];
+    if (!order?.length) return columnTasks;
+    const byId = new Map(columnTasks.map((task) => [task.id, task] as const));
+    const ordered = order.map((id) => byId.get(id)).filter((task): task is Task => Boolean(task));
+    const remaining = columnTasks.filter((task) => !order.includes(task.id));
+    return [...ordered, ...remaining];
+  }
+  function moveTaskInColumn(task: Task, direction: -1 | 1) {
+    const ids = orderedColumnTasks(task.status, grouped[task.status] || []).map((item) => item.id);
+    const index = ids.indexOf(task.id);
+    const swapIndex = index + direction;
+    if (index === -1 || swapIndex < 0 || swapIndex >= ids.length) return;
+    [ids[index], ids[swapIndex]] = [ids[swapIndex], ids[index]];
+    persistColumnOrder({ ...columnOrder, [task.status]: ids });
+  }
+  // Cards beyond the current batch are simply not rendered yet (a lightweight substitute
+  // for full list virtualization) so a very large column doesn't put thousands of DOM
+  // nodes on the page just because the workspace has that many tasks.
+  function columnCards(status: string) {
+    const ordered = orderedColumnTasks(status, grouped[status] || []);
+    const shown = columnRenderCounts[status] ?? COLUMN_RENDER_BATCH;
+    return { ordered, visible: ordered.slice(0, shown), remaining: Math.max(0, ordered.length - shown) };
+  }
+  function showMoreInColumn(status: string) { setColumnRenderCounts((current) => ({ ...current, [status]: (current[status] ?? COLUMN_RENDER_BATCH) + COLUMN_RENDER_BATCH })); }
   const noActionNeededCount = visibleTasks.filter((task) => task.status === "NO_ACTION_NEEDED").length;
   const selectedEditable = selected ? canEditTask(selected) : false;
   const calendarDays = useMemo(() => buildCalendarDays(calendarMonth), [calendarMonth]);
@@ -181,7 +226,8 @@ export function BoardClient({ initialTasks, members, role, canManageWorkspace: c
   function toggleAllVisibleTasks() { setSelectedTaskIds((current) => { const next = new Set(current); if (allVisibleSelected) visibleTasks.forEach((task) => next.delete(task.id)); else visibleTasks.forEach((task) => next.add(task.id)); return next; }); }
   async function bulkUpdate(action: BulkAction, value: string | null) {
     const taskIds = [...selectedTaskIds]; if (!taskIds.length) return;
-    setSaving(true); setError("");
+    const previous = tasks.filter((task) => taskIds.includes(task.id)).map((task) => ({ ...task, labels: [...task.labels] }));
+    setSaving(true); setError(""); setUndoAction(null);
     const response = await fetch(`/api/workspaces/${workspaceId}/tasks/bulk`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ taskIds, action, ...(action === "ASSIGN" ? { assigneeUserId: value } : action === "STATUS" ? { status: value } : action === "PRIORITY" ? { priority: value } : action === "DUE_DATE" ? { dueAt: value } : { labelId: value }) }) });
     setSaving(false);
     if (!response.ok) return setError((await response.json()).error || "Bulk update failed");
@@ -193,6 +239,19 @@ export function BoardClient({ initialTasks, members, role, canManageWorkspace: c
     result.tasks.forEach((task: Task) => detailCache.current.delete(task.id));
     if (result.recurringTasks?.length) setTasks((current) => [...result.recurringTasks.map((task: Task) => ({ ...task, assignee: members.find((member) => member.user.id === task.assigneeUserId)?.user || null, labels: [] })), ...current]);
     setError(`${result.updated} task${result.updated === 1 ? "" : "s"} updated${result.failed?.length ? `; ${result.failed.length} failed` : ""}.`);
+    const revertible = previous.filter((task) => updatedIds.has(task.id));
+    if (revertible.length) setUndoAction({ label: `Undo ${revertible.length} change${revertible.length === 1 ? "" : "s"}`, run: () => runBulkUndo(action, revertible) });
+  }
+  async function runBulkUndo(action: BulkAction, previous: Task[]) {
+    setSaving(true); setUndoAction(null);
+    await Promise.all(previous.map(async (task) => {
+      if (action === "ADD_LABEL" || action === "REMOVE_LABEL") await fetch(`/api/tasks/${task.id}/labels`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ labelIds: task.labels.map((label) => label.id) }) });
+      else { const field = action === "ASSIGN" ? "assigneeUserId" : action === "STATUS" ? "status" : action === "PRIORITY" ? "priority" : "dueAt"; await fetch(`/api/tasks/${task.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ [field]: task[field as "assigneeUserId" | "status" | "priority" | "dueAt"] }) }); }
+      detailCache.current.delete(task.id);
+    }));
+    setTasks((current) => current.map((task) => { const original = previous.find((item) => item.id === task.id); return original ? { ...task, ...original } : task; }));
+    setSaving(false);
+    setError("Undo complete.");
   }
   function assignmentControls(task: Task, compact = false) {
     if (task.assignee) return <span>{task.assignee.name || task.assignee.email}</span>;
@@ -201,7 +260,22 @@ export function BoardClient({ initialTasks, members, role, canManageWorkspace: c
   function updateFilter<K extends keyof FilterState>(key: K, value: FilterState[K]) { setFilters((current) => ({ ...current, [key]: value })); setSelectedViewId(""); }
   function toggleFilterMenu(name: string) { setOpenFilter((current) => current === name ? null : name); setShowSaveView(false); }
 
-  async function createTask(formData: FormData) { setError(""); const response = await fetch("/api/tasks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ workspaceId, title: formData.get("title"), priority: formData.get("priority"), assigneeUserId: formData.get("assigneeUserId") || null }) }); if (!response.ok) return setError((await response.json()).error); const task = await response.json(); task.assignee = members.find((member) => member.user.id === task.assigneeUserId)?.user || null; task.labels = []; setTasks((items) => [task, ...items]); setCreating(false); }
+  async function createTask(formData: FormData) {
+    setError("");
+    const title = String(formData.get("title") || "");
+    const priority = String(formData.get("priority") || "MEDIUM");
+    const assigneeUserId = (formData.get("assigneeUserId") as string) || null;
+    const optimisticId = `optimistic-${crypto.randomUUID()}`;
+    const optimisticTask: Task = { id: optimisticId, title, description: null, status: "TODO", priority, dueAt: null, startedAt: null, completedAt: null, estimatedMinutes: null, remainingMinutes: null, actualMinutes: null, blockedAt: null, blockedReason: null, blockerTaskId: null, recurrence: "NONE", recurrenceInterval: 1, updatedProductsCount: null, newProductsCount: null, updatedImagesCount: null, newImagesCount: null, createdByUserId: currentUserId, assigneeUserId, followUpWith: null, assignee: members.find((member) => member.user.id === assigneeUserId)?.user || null, labels: [] };
+    setTasks((items) => [optimisticTask, ...items]);
+    setCreating(false);
+    const response = await fetch("/api/tasks", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ workspaceId, title, priority, assigneeUserId }) });
+    if (!response.ok) { setTasks((items) => items.filter((item) => item.id !== optimisticId)); setCreating(true); return setError((await response.json()).error); }
+    const task = await response.json();
+    task.assignee = members.find((member) => member.user.id === task.assigneeUserId)?.user || null;
+    task.labels = [];
+    setTasks((items) => items.map((item) => item.id === optimisticId ? task : item));
+  }
   async function assignUnassignedTask(task: Task, assigneeUserId: string) {
     if (!assigneeUserId || task.assigneeUserId) return;
     setError("");
@@ -237,7 +311,7 @@ export function BoardClient({ initialTasks, members, role, canManageWorkspace: c
   }
   function cancelPointerDrag() { pointerDrag.current = null; setDraggingTaskId(null); setDragOverStatus(null); }
   function openTaskFromCard(task: Task) { if (suppressCardClick.current) { suppressCardClick.current = false; return; } void openTask(task); }
-  function clearAllFilters() { setFilters({ ...emptyFilters }); setRiskFilter(null); setSelectedViewId(""); setOpenFilter(null); setShowMoreFilters(false); setShowMobileFilters(false); }
+  function clearAllFilters() { setFilters({ ...emptyFilters }); setRiskFilter(null); setSelectedViewId(""); setOpenFilter(null); setShowMoreFilters(false); setShowMobileFilters(false); setUndoAction(null); }
   async function remind(task: Task) { const response = await fetch(`/api/tasks/${task.id}/reminders`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ scheduledAt: new Date().toISOString() }) }); setError(response.ok ? `Reminder sent: ${task.title}` : (await response.json()).error); }
 
   function loadTaskDetail(taskId: string) { const cached = detailCache.current.get(taskId); if (cached) return cached; const request = fetch(`/api/tasks/${taskId}`).then(async (response) => { if (!response.ok) throw new Error((await response.json().catch(() => ({ error: "Unable to open task details" }))).error); const detail = await response.json(); return { ...detail, labels: detail.labels ?? [], checklistItems: detail.checklistItems ?? [], comments: detail.comments ?? [], activities: detail.activities ?? [] } as TaskDetail; }); detailCache.current.set(taskId, request); request.catch(() => detailCache.current.delete(taskId)); return request; }
@@ -248,6 +322,7 @@ export function BoardClient({ initialTasks, members, role, canManageWorkspace: c
   async function addComment(event: FormEvent) { event.preventDefault(); if (!selected || !comment.trim()) return; const response = await fetch(`/api/tasks/${selected.id}/comments`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ body: comment }) }); if (!response.ok) return setError((await response.json()).error); const created = await response.json(); detailCache.current.delete(selected.id); setSelected({ ...selected, comments: [...selected.comments, created], activities: [{ id: crypto.randomUUID(), type: "COMMENT_ADDED", createdAt: new Date().toISOString(), actor: created.author }, ...selected.activities] }); setComment(""); }
   async function addChecklistItem(event: FormEvent) { event.preventDefault(); if (!selected || !checklistTitle.trim()) return; const response = await fetch(`/api/tasks/${selected.id}/checklist`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: checklistTitle }) }); if (!response.ok) return setError((await response.json()).error); const item = await response.json(); detailCache.current.delete(selected.id); setSelected({ ...selected, checklistItems: [...selected.checklistItems, item] }); setChecklistTitle(""); }
   async function toggleChecklistItem(item: ChecklistItem) { if (!selected) return; const response = await fetch(`/api/tasks/${selected.id}/checklist/${item.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ completed: !item.completed }) }); if (response.ok) { detailCache.current.delete(selected.id); setSelected({ ...selected, checklistItems: selected.checklistItems.map((current) => current.id === item.id ? { ...current, completed: !item.completed } : current) }); } }
+  function handleTaskCountChange(key: TaskCountKey, value: number | null) { setSelected((current) => current ? { ...current, [key]: value } : current); }
   async function createLabel(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); const response = await fetch(`/api/workspaces/${workspaceId}/labels`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: data.get("name"), color: data.get("color") }) }); if (!response.ok) return setError((await response.json()).error); const created = await response.json(); setLabels((items) => [...items, created].sort((a, b) => a.name.localeCompare(b.name))); form.reset(); setShowLabelManager(false); }
   async function saveView(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!viewName.trim()) return; const response = await fetch(`/api/workspaces/${workspaceId}/views`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: viewName, shared: shareView, filters }) }); if (!response.ok) return setError((await response.json()).error); const saved = await response.json(); setSavedViews((items) => [...items, saved]); setSelectedViewId(saved.id); setViewName(""); setShareView(false); setShowSaveView(false); }
   function applyView(id: string) { setSelectedViewId(id); const saved = savedViews.find((item) => item.id === id); setFilters(saved ? normalizeFilters(saved.filters) : { ...emptyFilters }); setOpenFilter(null); setShowMoreFilters(false); setShowMobileFilters(false); setShowSaveView(false); }
@@ -255,6 +330,7 @@ export function BoardClient({ initialTasks, members, role, canManageWorkspace: c
 
   return <>
     <header className="page-header board-page-header"><div><span className="eyebrow">PRODUCT LAUNCH</span><h1>Task board</h1><p>Move work forward, one clear task at a time.</p></div>{canCreate && <button className="primary-button small" onClick={() => setCreating(true)}>+ New task</button>}</header>
+    {typeof totalTaskCount === "number" && totalTaskCount > tasks.length && <div className="no-action-hint truncation-hint"><span>Showing the {tasks.length.toLocaleString()} most recent of {totalTaskCount.toLocaleString()} tasks. Use search or filters to narrow this down — older tasks and manager counts outside this range aren’t included.</span></div>}
     <section className="task-insight-strip" aria-label="Task insights"><div><strong>{tasks.length}</strong><span>Total</span></div><div><strong>{visibleTasks.length}</strong><span>Visible</span></div><div className={attentionCount ? "attention" : ""}><strong>{attentionCount}</strong><span>Needs attention</span></div><button type="button" aria-expanded={showInsights} onClick={() => { setShowInsights((value) => !value); setShowMoreFilters(false); setOpenFilter(null); setShowMobileFilters(false); }}>{showInsights ? "Hide insights" : "View insights"}<span aria-hidden="true">{showInsights ? "⌃" : "⌄"}</span></button></section>
     {canManageWorkspace && <ManagerActionCenter actionCenter={managerActionCenter} activeRisk={riskFilter} onSelectRisk={(risk) => { setRiskFilter((current) => current === risk ? null : risk); setSelectedTaskIds(new Set()); }} />}
     {showInsights && <section className="task-insights-compact" aria-label="Additional task insights"><div><span>Open tasks</span><strong>{compactInsights.open}</strong></div><div><span>Due in 7 days</span><strong>{compactInsights.dueSoon}</strong></div><div><span>Completed this week</span><strong>{compactInsights.completedThisWeek}</strong></div></section>}
@@ -277,53 +353,36 @@ export function BoardClient({ initialTasks, members, role, canManageWorkspace: c
     {filterChips.length > 0 && <section className="filter-chips">{filterChips.map((chip) => <span key={chip}>{chip}</span>)}<button type="button" onClick={clearAllFilters}>Clear all</button></section>}
     {selectedTaskIds.size > 0 && <BulkTaskToolbar selectedCount={selectedTaskIds.size} visibleCount={visibleTasks.length} allVisibleSelected={allVisibleSelected} members={members} labels={labels} onToggleAll={toggleAllVisibleTasks} onClear={() => setSelectedTaskIds(new Set())} onAction={bulkUpdate} />}
     <div className="view-toolbar"><nav className="view-switcher" aria-label="Task view">{(["board", "list", "calendar"] as ViewMode[]).map((mode) => <button key={mode} className={view === mode ? "active" : ""} aria-pressed={view === mode} onClick={() => setView(mode)}>{mode[0].toUpperCase() + mode.slice(1)}</button>)}</nav>{view === "board" && <label className="board-select-visible"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisibleTasks} aria-label="Select all visible tasks" /> Select all visible{visibleTasks.length ? ` (${visibleTasks.length})` : ""}</label>}</div>
-    {error && <div className="notice">{error}</div>}
+    {error && <div className="notice">{error}{undoAction && <button type="button" className="toolbar-link notice-undo" onClick={() => void undoAction.run()}>{undoAction.label}</button>}</div>}
     {creating && <form action={createTask} className="create-panel"><input name="title" placeholder="What needs to be done next?" maxLength={120} required autoFocus /><select name="priority"><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="URGENT">Urgent</option><option value="LOW">Low</option></select><select name="assigneeUserId"><option value="">Unassigned</option>{members.map((member) => <option key={member.user.id} value={member.user.id}>{personName(member)}</option>)}</select><button className="primary-button small">Add task</button><button type="button" className="ghost-button" onClick={() => setCreating(false)}>Cancel</button></form>}
     {view === "board" && <>
       {noActionNeededCount > 0 && <div className="no-action-hint"><span>{noActionNeededCount} {noActionNeededCount === 1 ? "task is" : "tasks are"} in No Action Needed and hidden from this board.</span><button type="button" onClick={() => setView("list")}>View in List</button></div>}
-      <section className="board">{boardColumns.map(([status, label]) => <div className={`column drop-zone ${dragOverStatus === status ? "drag-over" : ""}`} data-task-status={status} key={status}><div className="column-title"><h2>{label}</h2><span>{grouped[status].length}</span></div><div className="cards">{grouped[status].map((task) => { const editable = canEditTask(task); return <article className={`task-card ${draggingTaskId === task.id ? "dragging" : ""}`} key={task.id} data-draggable={editable || undefined} tabIndex={0} role="button" aria-label={`Open task: ${task.title}`} onPointerDown={(event) => startPointerDrag(event, task)} onPointerMove={movePointerDrag} onPointerUp={finishPointerDrag} onPointerCancel={cancelPointerDrag} onClick={() => openTaskFromCard(task)} onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) { event.preventDefault(); openTask(task); } }}><div className="task-card-top"><input className="task-selection-checkbox" type="checkbox" checked={selectedTaskIds.has(task.id)} onChange={() => toggleTaskSelection(task.id)} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} aria-label={`Select task: ${task.title}`} /><span className={`priority ${task.priority.toLowerCase()}`}>{priority[task.priority]}</span>{task.blockedAt || task.blockerTaskId ? <span className="work-badge blocked">Blocked</span> : null}{task.remainingMinutes != null ? <span className="work-badge effort">{Math.round(task.remainingMinutes / 6) / 10}h left</span> : !task.estimatedMinutes ? <span className="work-badge unestimated">Unestimated</span> : null}{task.labels.map((item) => <span className="task-label" style={{ borderColor: item.color, color: item.color }} key={item.id}>{item.name}</span>)}</div><h3>{task.title}</h3><p>{task.description || "A focused task with no additional details."}</p><div className="task-meta"><span className="avatar mini">{task.assignee?.name?.[0] || "?"}</span><span>{task.assignee?.name || "Unassigned"}</span>{task.followUpWith && <span className="follow-up-meta">Follow up: {task.followUpWith}</span>}{dueLabel(task.dueAt, task.status === "DONE")}<button type="button" className="task-open" onClick={(event) => { event.stopPropagation(); openTask(task); }} aria-label={`Open task: ${task.title}`}>Open</button></div>{!task.assigneeUserId && assignmentControls(task, true)}{editable && <div className="card-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}><select aria-label={`Status for ${task.title}`} value={task.status} onChange={(event) => updateStatus(task, event.target.value)}>{taskStatuses.map(([value, text]) => <option value={value} key={value}>{text}</option>)}</select><button onClick={() => remind(task)} title="Send a reminder now">Remind</button></div>}</article>; })}</div></div>)}</section>
+      <section className="board">{boardColumns.map(([status, label]) => { const { visible, ordered, remaining } = columnCards(status); return <div className={`column drop-zone ${dragOverStatus === status ? "drag-over" : ""}`} data-task-status={status} key={status}><div className="column-title"><h2>{label}</h2><span>{grouped[status].length}</span></div><div className="cards">{visible.map((task) => { const editable = canEditTask(task); const orderIndex = ordered.indexOf(task); return <article className={`task-card ${draggingTaskId === task.id ? "dragging" : ""}`} key={task.id} data-draggable={editable || undefined} tabIndex={0} role="button" aria-label={`Open task: ${task.title}`} onPointerDown={(event) => startPointerDrag(event, task)} onPointerMove={movePointerDrag} onPointerUp={finishPointerDrag} onPointerCancel={cancelPointerDrag} onClick={() => openTaskFromCard(task)} onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) { event.preventDefault(); openTask(task); } }}><div className="task-card-top"><input className="task-selection-checkbox" type="checkbox" checked={selectedTaskIds.has(task.id)} onChange={() => toggleTaskSelection(task.id)} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} aria-label={`Select task: ${task.title}`} /><span className={`priority ${task.priority.toLowerCase()}`}>{priority[task.priority]}</span>{task.blockedAt || task.blockerTaskId ? <span className="work-badge blocked">Blocked</span> : null}{task.remainingMinutes != null ? <span className="work-badge effort">{Math.round(task.remainingMinutes / 6) / 10}h left</span> : !task.estimatedMinutes ? <span className="work-badge unestimated">Unestimated</span> : null}{task.labels.map((item) => <span className="task-label" style={{ borderColor: item.color, color: item.color }} key={item.id}>{item.name}</span>)}</div><h3>{task.title}</h3><p>{task.description || "A focused task with no additional details."}</p><div className="task-meta"><span className="avatar mini">{task.assignee?.name?.[0] || "?"}</span><span>{task.assignee?.name || "Unassigned"}</span>{task.followUpWith && <span className="follow-up-meta">Follow up: {task.followUpWith}</span>}{dueLabel(task.dueAt, task.status === "DONE")}<button type="button" className="task-open" onClick={(event) => { event.stopPropagation(); openTask(task); }} aria-label={`Open task: ${task.title}`}>Open</button></div>{!task.assigneeUserId && assignmentControls(task, true)}{editable && <div className="card-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}><select aria-label={`Status for ${task.title}`} value={task.status} onChange={(event) => updateStatus(task, event.target.value)}>{taskStatuses.map(([value, text]) => <option value={value} key={value}>{text}</option>)}</select><button onClick={() => remind(task)} title="Send a reminder now">Remind</button><button onClick={() => moveTaskInColumn(task, -1)} disabled={orderIndex <= 0} aria-label={`Move ${task.title} earlier in ${label}`} title="Move up">↑</button><button onClick={() => moveTaskInColumn(task, 1)} disabled={orderIndex === -1 || orderIndex >= ordered.length - 1} aria-label={`Move ${task.title} later in ${label}`} title="Move down">↓</button></div>}</article>; })}</div>{remaining > 0 && <button type="button" className="ghost-button column-show-more" onClick={() => showMoreInColumn(status)}>Show {Math.min(remaining, COLUMN_RENDER_BATCH)} more</button>}</div>; })}</section>
       {visibleTasks.length === 0 && <div className="empty-view board-empty-state"><strong>No tasks match these filters.</strong><span>Try clearing a filter or create a new task.</span><div><button type="button" className="ghost-button" onClick={clearAllFilters}>Clear filters</button>{canCreate && <button type="button" className="primary-button small" onClick={() => setCreating(true)}>+ New task</button>}</div></div>}
     </>}
-    {view === "list" && <section className="task-list-view"><table><thead><tr><th><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisibleTasks} aria-label="Select all visible tasks" /></th><th>Task</th><th>Status</th><th>Priority</th><th>Labels</th><th>Assignee</th><th>Due date</th></tr></thead><tbody>{visibleTasks.map((task) => <tr className={task.status === "NO_ACTION_NEEDED" ? "no-action-row" : ""} key={task.id} tabIndex={0} role="button" aria-label={`Open task: ${task.title}`} onClick={() => openTask(task)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openTask(task); } }}><td onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selectedTaskIds.has(task.id)} onChange={() => toggleTaskSelection(task.id)} aria-label={`Select task: ${task.title}`} /></td><td><strong>{task.title}</strong><small>{task.description || "No description"}</small></td><td><select className="inline-status-select" value={task.status} disabled={!canEditTask(task)} aria-label={`Status for ${task.title}`} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} onChange={(event) => { event.stopPropagation(); void updateStatus(task, event.target.value); }}>{taskStatuses.map(([value, text]) => <option value={value} key={value}>{text}</option>)}</select></td><td><span className={`priority ${task.priority.toLowerCase()}`}>{priority[task.priority]}</span></td><td>{task.labels.map((item) => <span className="task-label" style={{ borderColor: item.color, color: item.color }} key={item.id}>{item.name}</span>)}</td><td>{assignmentControls(task)}</td><td>{task.dueAt ? new Date(task.dueAt).toLocaleString() : "No due date"}</td></tr>)}</tbody></table>{visibleTasks.length === 0 && <div className="empty-view">No tasks match these filters.</div>}</section>}
+    {view === "list" && <section className="task-list-view"><table><thead><tr><th><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisibleTasks} aria-label="Select all visible tasks" /></th><th>Task</th><th>Status</th><th>Priority</th><th>Labels</th><th>Assignee</th><th>Due date</th></tr></thead><tbody>{visibleTasks.slice(0, listRenderCount).map((task) => <tr className={task.status === "NO_ACTION_NEEDED" ? "no-action-row" : ""} key={task.id} tabIndex={0} role="button" aria-label={`Open task: ${task.title}`} onClick={() => openTask(task)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openTask(task); } }}><td onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selectedTaskIds.has(task.id)} onChange={() => toggleTaskSelection(task.id)} aria-label={`Select task: ${task.title}`} /></td><td><strong>{task.title}</strong><small>{task.description || "No description"}</small></td><td><select className="inline-status-select" value={task.status} disabled={!canEditTask(task)} aria-label={`Status for ${task.title}`} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} onChange={(event) => { event.stopPropagation(); void updateStatus(task, event.target.value); }}>{taskStatuses.map(([value, text]) => <option value={value} key={value}>{text}</option>)}</select></td><td><span className={`priority ${task.priority.toLowerCase()}`}>{priority[task.priority]}</span></td><td>{task.labels.map((item) => <span className="task-label" style={{ borderColor: item.color, color: item.color }} key={item.id}>{item.name}</span>)}</td><td>{assignmentControls(task)}</td><td>{task.dueAt ? new Date(task.dueAt).toLocaleString() : "No due date"}</td></tr>)}</tbody></table>{visibleTasks.length === 0 && <div className="empty-view">No tasks match these filters.</div>}{visibleTasks.length > listRenderCount && <div className="list-show-more"><button type="button" className="ghost-button" onClick={() => setListRenderCount((count) => count + LIST_RENDER_BATCH)}>Show {Math.min(visibleTasks.length - listRenderCount, LIST_RENDER_BATCH)} more ({visibleTasks.length - listRenderCount} remaining)</button></div>}</section>}
     {view === "calendar" && <section className="calendar-view"><div className="calendar-toolbar"><button onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}>Previous</button><h2>{calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2><button onClick={() => setCalendarMonth(new Date())}>Today</button><button onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}>Next</button></div><div className="calendar-grid calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <strong key={day}>{day}</strong>)}</div><div className="calendar-grid">{calendarDays.map((day) => { const key = dateKey(day); const dayTasks = tasksByDate[key] || []; return <div className={`calendar-day ${day.getMonth() !== calendarMonth.getMonth() ? "outside" : ""}`} key={key}><span>{day.getDate()}</span>{dayTasks.map((task) => <button key={task.id} className={`calendar-task ${task.priority.toLowerCase()}`} onClick={() => openTask(task)} title={task.title}>{task.title}</button>)}</div>; })}</div>{visibleTasks.some((task) => !task.dueAt) && <div className="unscheduled"><h3>Unscheduled</h3><div>{visibleTasks.filter((task) => !task.dueAt).map((task) => <button key={task.id} onClick={() => openTask(task)}>{task.title}</button>)}</div></div>}</section>}
-    {selected && <div className="drawer-backdrop" onClick={() => setSelected(null)}>
-      <aside ref={drawerRef} className="task-drawer" role="dialog" aria-modal="true" aria-labelledby="task-drawer-title" aria-busy={loadingTaskId === selected.id} tabIndex={-1} onClick={(event) => event.stopPropagation()}>
-        <button className="drawer-close" onClick={() => setSelected(null)} aria-label="Close task details">X</button>
-        <span className={`priority ${selected.priority.toLowerCase()}`}>{priority[selected.priority]}</span>
-        <h2 id="task-drawer-title">{selected.title}</h2>
-        {!selectedEditable && <p className="read-only-note">You have read-only access to this task.</p>}
-        <form onSubmit={saveTask} className="detail-form">
-          <fieldset disabled={!selectedEditable}>
-            <label>Title<input name="title" defaultValue={selected.title} /></label>
-            <label>Description<textarea name="description" defaultValue={selected.description || ""} rows={4} /></label>
-            <div className="detail-grid"><label>Status<select name="status" defaultValue={selected.status}>{taskStatuses.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label><label>Priority<select name="priority" defaultValue={selected.priority}>{Object.entries(priority).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label><label>Due date<input name="dueAt" type="datetime-local" defaultValue={selected.dueAt ? new Date(selected.dueAt).toISOString().slice(0, 16) : ""} /></label></div>
-            <label>Assignee<select name="assigneeUserId" defaultValue={selected.assigneeUserId || ""}><option value="">Unassigned</option>{members.map((member) => <option key={member.user.id} value={member.user.id}>{personName(member)}</option>)}</select></label>
-            <label>Follow up with<input name="followUpWith" defaultValue={selected.followUpWith || ""} maxLength={120} placeholder="Person to follow up with" /></label>
-            <details className="work-planning-section drawer-details">
-              <summary><span><strong>Work planning</strong><small>Estimate and track effort</small></span><span className="disclosure-chevron" aria-hidden="true">⌄</span></summary>
-              <div className="detail-grid planning-grid"><label>Estimated hours<input name="estimatedHours" type="number" min="0" max="16666" step="0.25" defaultValue={selected.estimatedMinutes == null ? "" : selected.estimatedMinutes / 60} placeholder="e.g. 4" /></label><label>Remaining hours<input name="remainingHours" type="number" min="0" max="16666" step="0.25" defaultValue={selected.remainingMinutes == null ? "" : selected.remainingMinutes / 60} placeholder="e.g. 2.5" /></label><label>Actual hours<input name="actualHours" type="number" min="0" max="16666" step="0.25" defaultValue={selected.actualMinutes == null ? "" : selected.actualMinutes / 60} placeholder="Add on completion" /></label></div>
-            </details>
-            <details className={`blocker-section drawer-details ${selected.blockedAt || selected.blockerTaskId ? "is-blocked" : ""}`} open={Boolean(selected.blockedAt || selected.blockerTaskId)}>
-              <summary><span><strong>Blockers &amp; dependencies</strong><small>{selected.blockedAt || selected.blockerTaskId ? "Needs attention" : "Optional"}</small></span><span className="disclosure-chevron" aria-hidden="true">⌄</span></summary>
-              <label>Blocked by task<select name="blockerTaskId" defaultValue={selected.blockerTaskId || ""}><option value="">No task dependency</option>{tasks.filter((task) => task.id !== selected.id && task.status !== "DONE").map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
-              <label>Blocking reason<textarea name="blockedReason" rows={2} maxLength={500} defaultValue={selected.blockedReason || ""} placeholder="Example: Waiting for approved product data" /></label>
-            </details>
-            <div className="detail-grid"><label>Repeat<select name="recurrence" defaultValue={selected.recurrence || "NONE"}><option value="NONE">Does not repeat</option><option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="MONTHLY">Monthly</option></select></label><label>Every<input name="recurrenceInterval" type="number" min="1" max="365" defaultValue={selected.recurrenceInterval || 1} /></label></div>
-            <small className="field-help">A new task is created automatically when this one is completed.</small>
-            <details className="task-count-section drawer-details">
-              <summary><span><strong>Product &amp; image counts</strong><small>Optional reporting metrics</small></span><span className="disclosure-chevron" aria-hidden="true">⌄</span></summary>
-              <div className="task-count-options">{taskCountOptions.map(({ key, label }) => { const enabled = selected[key] !== null; return <div className={`task-count-option ${enabled ? "selected" : ""}`} key={key}><label className="task-count-toggle"><input type="checkbox" checked={enabled} onChange={(event) => setSelected((current) => current ? { ...current, [key]: event.target.checked ? 0 : null } : current)} /><span>{label}</span></label><input className="task-count-input" type="number" min="0" max="1000000000" step="1" inputMode="numeric" aria-label={`${label} value`} disabled={!enabled} value={enabled ? selected[key] ?? 0 : ""} placeholder="0" onChange={(event) => { const value = Math.max(0, Math.min(1_000_000_000, Math.trunc(Number(event.target.value) || 0))); setSelected((current) => current ? { ...current, [key]: value } : current); }} /></div>; })}</div>
-            </details>
-            {selectedEditable && <button className="primary-button" disabled={saving}>{saving ? "Saving..." : "Save changes"}</button>}
-          </fieldset>
-        </form>
-        {!!selected.sourceEmails?.length && <details className="drawer-section drawer-details source-email-section"><summary><span><strong>Source email</strong><small>{selected.sourceEmails.length} linked email{selected.sourceEmails.length === 1 ? "" : "s"}</small></span><span className="disclosure-chevron" aria-hidden="true">⌄</span></summary>{selected.sourceEmails.map((email) => <article key={email.id}><strong>{email.subject}</strong><span>{email.senderAddress} → {email.connector.mailboxAddress}</span><small>{new Date(email.receivedAt).toLocaleString()}</small></article>)}</details>}
-        <details className="drawer-section drawer-details"><summary><span><strong>Labels</strong><small>{selected.labels.length ? `${selected.labels.length} applied` : "None applied"}</small></span><span className="disclosure-chevron" aria-hidden="true">⌄</span></summary>{labels.length ? <div className="drawer-labels">{labels.map((label) => <label key={label.id}><input type="checkbox" disabled={!selectedEditable} checked={selected.labels.some((item) => item.id === label.id)} onChange={() => setTaskLabels(toggleValue(selected.labels.map((item) => item.id), label.id))} /><i className="label-dot" style={{ backgroundColor: label.color }} /> {label.name}</label>)}</div> : <p className="empty-copy">No workspace labels yet.</p>}</details>
-        <details className="drawer-section drawer-details"><summary><span><strong>Checklist</strong><small>{selected.checklistItems.filter((item) => item.completed).length}/{selected.checklistItems.length} complete</small></span><span className="disclosure-chevron" aria-hidden="true">⌄</span></summary>{selected.checklistItems.map((item) => <label className="checklist-item" key={item.id}><input type="checkbox" disabled={!selectedEditable} checked={item.completed} onChange={() => toggleChecklistItem(item)} /><span className={item.completed ? "completed" : ""}>{item.title}</span></label>)}{selectedEditable && <form onSubmit={addChecklistItem} className="comment-form"><input value={checklistTitle} onChange={(event) => setChecklistTitle(event.target.value)} placeholder="Add checklist item..." maxLength={200} /><button className="ghost-button">Add item</button></form>}</details>
-        <details className="drawer-section drawer-details"><summary><span><strong>Comments</strong><small>{selected.comments.length} comment{selected.comments.length === 1 ? "" : "s"}</small></span><span className="disclosure-chevron" aria-hidden="true">⌄</span></summary>{selected.comments.map((item) => <div className="comment" key={item.id}><strong>{item.author.name || item.author.email}</strong><p>{item.body}</p><small>{new Date(item.createdAt).toLocaleString()}</small></div>)}{selectedEditable && <form onSubmit={addComment} className="comment-form"><textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Write a comment..." rows={3} /><button className="ghost-button">Add comment</button></form>}</details>
-        <details className="drawer-section drawer-details"><summary><span><strong>Activity</strong><small>{selected.activities.length} event{selected.activities.length === 1 ? "" : "s"}</small></span><span className="disclosure-chevron" aria-hidden="true">⌄</span></summary>{selected.activities.map((item) => <p className="activity-row" key={item.id}><strong>{item.actor.name || item.actor.email}</strong> {item.type.toLowerCase().replaceAll("_", " ")} <small>{new Date(item.createdAt).toLocaleString()}</small></p>)}</details>
-      </aside>
-    </div>}
+    {selected && <TaskDrawer
+      task={selected}
+      editable={selectedEditable}
+      loading={loadingTaskId === selected.id}
+      drawerRef={drawerRef}
+      members={members}
+      allTasks={tasks}
+      labels={labels}
+      comment={comment}
+      onCommentChange={setComment}
+      checklistTitle={checklistTitle}
+      onChecklistTitleChange={setChecklistTitle}
+      saving={saving}
+      onClose={() => setSelected(null)}
+      onSave={saveTask}
+      onTaskCountChange={handleTaskCountChange}
+      onSetLabels={setTaskLabels}
+      onToggleChecklistItem={toggleChecklistItem}
+      onAddChecklistItem={addChecklistItem}
+      onAddComment={addComment}
+    />}
     {selected && loadingTaskId === selected.id && <div className="task-detail-progress" role="status"><span aria-hidden="true" /> Loading the latest details...</div>}
   </>;
 }
