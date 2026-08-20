@@ -72,3 +72,16 @@ pnpm verify:email-schema
 ```
 
 The production build regenerates the Prisma client automatically.
+
+## Go-live checklist
+
+Before inviting real users:
+
+- Set unique, high-entropy values for `AUTH_SECRET` and `CRON_SECRET` in the deployment platform.
+- Set `NEXT_PUBLIC_APP_URL` and `TASKFLOW_PUBLIC_URL` to the final HTTPS origin.
+- Use production Supabase pooler URLs and apply all reviewed Prisma migrations.
+- Configure real SMTP delivery, verify the sender domain, and confirm delivery failure handling.
+- Keep demo seed data out of production; create the first owner account through the controlled onboarding process.
+- Configure the scheduled request for `POST /api/reminders/process` with the `CRON_SECRET` bearer token.
+- Verify `/api/health`, login, workspace isolation, invitation flow, task creation, notifications, and mobile/PWA behavior in the production environment.
+- Enable GitHub branch protection and require the CI workflow to pass before merging.
