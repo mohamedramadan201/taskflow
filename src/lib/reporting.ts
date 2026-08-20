@@ -13,6 +13,8 @@ export type ReportMember = {
   user: { id: string; name: string | null; email: string };
 };
 
+export type ManagerActionRisk = "overdue" | "blocked" | "unassigned" | "urgent" | "unestimated" | "overloaded";
+
 const DAY = 86_400_000;
 const WEEK = 7 * DAY;
 export const minutesToHours = (minutes: number) => Math.round((minutes / 60) * 10) / 10;
@@ -29,6 +31,33 @@ function summarizeProductAndImageCounts(tasks: ReportTask[]) {
   }, { updatedProducts: 0, newProducts: 0, updatedImages: 0, newImages: 0, reportingTasks: 0 });
   const totalProducts = values.updatedProducts + values.newProducts; const totalImages = values.updatedImages + values.newImages;
   return { ...values, totalProducts, totalImages, totalOutput: totalProducts + totalImages };
+}
+
+export function buildManagerActionCenter(tasks: ReportTask[], workload: Array<{ user: { id: string }; utilization: number }>, now = new Date(), overloadThreshold = 100) {
+  const activeTasks = tasks.filter((task) => task.status !== "DONE" && task.status !== "NO_ACTION_NEEDED");
+  const ids = (predicate: (task: ReportTask) => boolean) => activeTasks.filter(predicate).map((task) => task.id).filter((id): id is string => Boolean(id));
+  const overloadedMemberIds = workload.filter((member) => member.utilization > overloadThreshold).map((member) => member.user.id);
+  const taskIds: Record<Exclude<ManagerActionRisk, "overloaded">, string[]> = {
+    overdue: ids((task) => Boolean(task.dueAt && new Date(task.dueAt) < now)),
+    blocked: ids((task) => Boolean(task.blockedAt || task.blockerTaskId)),
+    unassigned: ids((task) => !task.assigneeUserId),
+    urgent: ids((task) => task.priority === "URGENT"),
+    unestimated: ids((task) => !task.estimatedMinutes),
+  };
+  const taskRiskIds = new Set(Object.values(taskIds).flat());
+  return {
+    total: taskRiskIds.size + overloadedMemberIds.length,
+    counts: {
+      overdue: taskIds.overdue.length,
+      blocked: taskIds.blocked.length,
+      unassigned: taskIds.unassigned.length,
+      urgent: taskIds.urgent.length,
+      unestimated: taskIds.unestimated.length,
+      overloaded: overloadedMemberIds.length,
+    },
+    taskIds,
+    overloadedMemberIds,
+  };
 }
 
 export function reportRangeStart(range: string, now = new Date()) { return range === "all" ? undefined : new Date(now.getTime() - Number(range) * DAY); }
@@ -81,7 +110,56 @@ export function buildWorkspaceReport(tasks: ReportTask[], members: ReportMember[
   const flowWeeks = Array.from({ length: 8 }, (_, index) => { const start = new Date(currentWeek.getTime() - (7 - index) * WEEK); const end = new Date(start.getTime() + WEEK); const completedTasks = tasks.filter((task) => task.completedAt && new Date(task.completedAt) >= start && new Date(task.completedAt) < end); const cycleValues = completedTasks.filter((task) => task.startedAt).map((task) => Math.max(0, (new Date(task.completedAt!).getTime() - new Date(task.startedAt!).getTime()) / DAY)); return { label: weekLabel(start), completed: completedTasks.length, onTime: completedTasks.filter((task) => !task.dueAt || new Date(task.completedAt!) <= new Date(task.dueAt)).length, averageCycleDays: cycleValues.length ? Math.round((cycleValues.reduce((a, b) => a + b, 0) / cycleValues.length) * 10) / 10 : 0 }; });
   const estimatedCompleted = tasks.filter((task) => task.status === "DONE" && task.estimatedMinutes && task.actualMinutes != null);
   const estimateAccuracy = estimatedCompleted.length ? Math.round(estimatedCompleted.reduce((sum, task) => sum + Math.min(task.estimatedMinutes!, task.actualMinutes!) / Math.max(task.estimatedMinutes!, task.actualMinutes!) * 100, 0) / estimatedCompleted.length) : 0;
-  return { total: tasks.length, completed, noActionNeeded: tasks.length - actionableTasks.length, completionRate: actionableTasks.length ? Math.round((completed / actionableTasks.length) * 100) : 0, overdue: overdueTasks.length, dueSoon: dueSoonTasks.length, unassigned: activeTasks.filter((task) => !task.assigneeUserId).length, blocked: activeTasks.filter((task) => task.blockedAt || task.blockerTaskId).length, unestimated: activeTasks.filter((task) => !task.estimatedMinutes).length, overloaded: workload.filter((item) => item.utilization > settings.overloadThreshold).length, statuses, priorities, workload, weeks: weeks.map(({ label, start }) => ({ label, start })), risks, flowWeeks, estimateAccuracy, productAndImageCounts, outputByMember };
+  const actionCenter = buildManagerActionCenter(tasks, workload, now, settings.overloadThreshold);
+  return { total: tasks.length, completed, noActionNeeded: tasks.length - actionableTasks.length, completionRate: actionableTasks.length ? Math.round((completed / actionableTasks.length) * 100) : 0, overdue: overdueTasks.length, dueSoon: dueSoonTasks.length, unassigned: activeTasks.filter((task) => !task.assigneeUserId).length, blocked: activeTasks.filter((task) => task.blockedAt || task.blockerTaskId).length, unestimated: activeTasks.filter((task) => !task.estimatedMinutes).length, overloaded: workload.filter((item) => item.utilization > settings.overloadThreshold).length, statuses, priorities, workload, weeks: weeks.map(({ label, start }) => ({ label, start })), risks, flowWeeks, estimateAccuracy, productAndImageCounts, outputByMember, actionCenter };
+}
+
+export function buildWeeklyManagementSummary(tasks: ReportTask[], members: ReportMember[], now = new Date(), settings = { overloadThreshold: 100, dueSoonDays: 2, stalledAfterDays: 5 }) {
+  const report = buildWorkspaceReport(tasks, members, now, tasks, settings);
+  const weekStart = monday(now);
+  const weekEnd = new Date(weekStart.getTime() + WEEK);
+  const inCurrentWeek = (value?: Date | string | null) => Boolean(value && new Date(value) >= weekStart && new Date(value) < weekEnd);
+  const completedThisWeek = tasks.filter((task) => task.status === "DONE" && inCurrentWeek(task.completedAt));
+  const createdThisWeek = tasks.filter((task) => inCurrentWeek(task.createdAt));
+  const cycleValues = completedThisWeek.filter((task) => task.startedAt).map((task) => Math.max(0, (new Date(task.completedAt!).getTime() - new Date(task.startedAt!).getTime()) / DAY));
+  const averageCycleDays = cycleValues.length ? Math.round((cycleValues.reduce((sum, value) => sum + value, 0) / cycleValues.length) * 10) / 10 : null;
+  const keyRisks = [
+    report.overdue ? `${report.overdue} overdue task${report.overdue === 1 ? "" : "s"}` : "",
+    report.blocked ? `${report.blocked} blocked task${report.blocked === 1 ? "" : "s"}` : "",
+    report.overloaded ? `${report.overloaded} team member${report.overloaded === 1 ? "" : "s"} above capacity` : "",
+    report.unassigned ? `${report.unassigned} unassigned task${report.unassigned === 1 ? "" : "s"}` : "",
+  ].filter(Boolean);
+  const managementActions = [
+    report.overdue ? `Review ${report.overdue} overdue task${report.overdue === 1 ? "" : "s"}.` : "",
+    report.blocked ? `Resolve ${report.blocked} blocked task${report.blocked === 1 ? "" : "s"}.` : "",
+    report.overloaded ? `Rebalance ${report.overloaded} overloaded team member${report.overloaded === 1 ? "" : "s"}.` : "",
+    report.unassigned ? `Assign owners to ${report.unassigned} unassigned task${report.unassigned === 1 ? "" : "s"}.` : "",
+    report.unestimated ? `Add estimates to ${report.unestimated} open task${report.unestimated === 1 ? "" : "s"}.` : "",
+  ].filter(Boolean);
+  return { completedThisWeek: completedThisWeek.length, createdThisWeek: createdThisWeek.length, openTasks: tasks.filter((task) => task.status !== "DONE" && task.status !== "NO_ACTION_NEEDED").length, overdue: report.overdue, blocked: report.blocked, urgentOpen: tasks.filter((task) => task.status !== "DONE" && task.status !== "NO_ACTION_NEEDED" && task.priority === "URGENT").length, unassigned: report.unassigned, overloaded: report.overloaded, overloadThreshold: settings.overloadThreshold, averageCycleDays, keyRisks, managementActions, workload: report.workload, generatedAt: now.toISOString() };
+}
+
+export function weeklySummaryToText(summary: ReturnType<typeof buildWeeklyManagementSummary>) {
+  const lines = [
+    "TaskFlow weekly management summary",
+    "",
+    `Completed this week: ${summary.completedThisWeek}`,
+    `Created this week: ${summary.createdThisWeek}`,
+    `Open tasks: ${summary.openTasks}`,
+    `Overdue tasks: ${summary.overdue}`,
+    `Blocked tasks: ${summary.blocked}`,
+    `Urgent open tasks: ${summary.urgentOpen}`,
+    `Unassigned tasks: ${summary.unassigned}`,
+    `Overloaded team members: ${summary.overloaded}`,
+    `Average cycle time: ${summary.averageCycleDays === null ? "Not available" : `${summary.averageCycleDays} days`}`,
+    "",
+    "Key risks",
+    ...(summary.keyRisks.length ? summary.keyRisks.map((risk) => `- ${risk}`) : ["- No current management risks."]),
+    "",
+    "Management actions",
+    ...(summary.managementActions.length ? summary.managementActions.map((action, index) => `${index + 1}. ${action}`) : ["- No immediate management action required."]),
+  ];
+  return lines.join("\n");
 }
 
 export function reportToCsv(report: ReturnType<typeof buildWorkspaceReport>) {

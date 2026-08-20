@@ -15,6 +15,18 @@ export const taskInputSchema = z.object({
 });
 export const taskPatchSchema = taskInputSchema.omit({ workspaceId: true }).partial().refine((data) => Object.keys(data).length > 0);
 export const taskAssignmentSchema = z.object({ assigneeUserId: z.string().min(1) });
+export const taskBulkActionSchema = z.object({
+  taskIds: z.array(z.string().min(1)).min(1).max(100),
+  action: z.enum(["ASSIGN", "STATUS", "PRIORITY", "DUE_DATE", "ADD_LABEL", "REMOVE_LABEL"]),
+  assigneeUserId: z.string().min(1).nullable().optional(),
+  status: z.enum(["TODO", "IN_PROGRESS", "DONE", "NO_ACTION_NEEDED"]).optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
+  dueAt: z.string().datetime().nullable().optional(),
+  labelId: z.string().min(1).optional(),
+}).superRefine((value, context) => {
+  const required: Record<typeof value.action, keyof typeof value> = { ASSIGN: "assigneeUserId", STATUS: "status", PRIORITY: "priority", DUE_DATE: "dueAt", ADD_LABEL: "labelId", REMOVE_LABEL: "labelId" };
+  if (value[required[value.action]] === undefined) context.addIssue({ code: "custom", path: [required[value.action]], message: "This value is required for the selected action" });
+});
 export const reminderSchema = z.object({ scheduledAt: z.string().datetime(), userId: z.string().min(1).optional() });
 export const commentSchema = z.object({ body: z.string().trim().min(1).max(2000) });
 export const invitationSchema = z.object({ email: z.string().email(), role: roleSchema.default("MEMBER") });
