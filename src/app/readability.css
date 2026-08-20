@@ -212,6 +212,8 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 /* Content surfaces */
 .task-card { transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
 .task-card:hover { border-color: #c5cec8; box-shadow: 0 12px 28px #173c3314; transform: translateY(-1px); }
+.task-card[tabindex="0"] { cursor: pointer; }
+.task-card[tabindex="0"]:focus-visible { border-color: #78b89b; box-shadow: 0 0 0 3px #7cb8a566; transform: none; }
 .task-card h3 { line-height: 1.35; }
 .task-card p { line-height: 1.65; }
 .task-meta { flex-wrap: wrap; }
@@ -225,8 +227,24 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .task-list-view th, .workload-report th { font-size: 11px; letter-spacing: .65px; }
 .task-list-view td, .workload-report td { font-size: 13px; }
 .task-drawer { border-left: 1px solid var(--line); box-shadow: -18px 0 48px #10251f24; }
+.task-drawer:focus { outline: none; }
 .drawer-close { width: 40px; height: 40px; min-height: 40px; display: grid; place-items: center; border-radius: 50%; }
 .drawer-close:hover { background: #edf0eb; color: var(--ink); }
+.drawer-details { gap: 12px; }
+.drawer-details > summary { display:flex; align-items:center; justify-content:space-between; gap:12px; list-style:none; cursor:pointer; }
+.drawer-details > summary::-webkit-details-marker { display:none; }
+.drawer-details > summary > span:first-child { display:grid; gap:3px; min-width:0; }
+.drawer-details > summary strong { color:var(--ink); font-size:14px; }
+.drawer-details > summary small { color:var(--muted); font-size:11px; font-weight:400; }
+.drawer-details > summary .disclosure-chevron { color:var(--muted); font-size:16px; transition:transform .16s ease; }
+.drawer-details[open] > summary .disclosure-chevron { transform:rotate(180deg); }
+.drawer-details > summary:focus-visible { outline:3px solid #7cb8a5; outline-offset:4px; border-radius:6px; }
+.drawer-details:not([open]) { gap:0; }
+.drawer-details:not([open]) > summary { margin:0; }
+.board-empty-state { display:grid; justify-items:center; gap:8px; margin:18px 0; padding:38px 20px; border:1px dashed var(--line); border-radius:14px; background:var(--surface-raised); }
+.board-empty-state strong { color:var(--ink); }
+.board-empty-state span { color:var(--muted); font-size:13px; }
+.board-empty-state > div { display:flex; gap:8px; margin-top:7px; }
 .task-count-section { margin: 4px 0 2px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }
 .task-count-heading { margin-bottom: 12px; }
 .task-count-heading h3 { margin: 0; color: var(--ink); font-size: 15px; line-height: 1.3; }
