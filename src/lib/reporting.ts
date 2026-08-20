@@ -96,13 +96,29 @@ export function taskRiskReasons(task: ReportTask, now = new Date(), settings = {
   return reasons;
 }
 
+const STATUS_ORDER = ["TODO", "IN_PROGRESS", "DONE", "NO_ACTION_NEEDED"] as const;
+const PRIORITY_ORDER = ["URGENT", "HIGH", "MEDIUM", "LOW"] as const;
+
 export function buildWorkspaceReport(tasks: ReportTask[], members: ReportMember[], now = new Date(), outputTasks = tasks, settings = { overloadThreshold: 100, dueSoonDays: 2, stalledAfterDays: 5 }) {
   const activeTasks = tasks.filter((task) => task.status !== "DONE" && task.status !== "NO_ACTION_NEEDED");
   const actionableTasks = tasks.filter((task) => task.status !== "NO_ACTION_NEEDED");
-  const overdueTasks = activeTasks.filter((task) => task.dueAt && new Date(task.dueAt) < now);
-  const dueSoonTasks = activeTasks.filter((task) => task.dueAt && new Date(task.dueAt) >= now && new Date(task.dueAt).getTime() <= now.getTime() + 7 * DAY);
-  const statuses = ["TODO", "IN_PROGRESS", "DONE", "NO_ACTION_NEEDED"].map((status) => ({ status, count: tasks.filter((task) => task.status === status).length }));
-  const priorities = ["URGENT", "HIGH", "MEDIUM", "LOW"].map((priority) => ({ priority, count: tasks.filter((task) => task.priority === priority).length }));
+  // Status counts, priority counts, and the overdue/due-soon splits all read the same
+  // `tasks` array, so a single pass replaces six separate full-array scans.
+  const statusCounts: Record<string, number> = Object.fromEntries(STATUS_ORDER.map((status) => [status, 0]));
+  const priorityCounts: Record<string, number> = Object.fromEntries(PRIORITY_ORDER.map((priority) => [priority, 0]));
+  const overdueTasks: ReportTask[] = [];
+  const dueSoonTasks: ReportTask[] = [];
+  for (const task of tasks) {
+    statusCounts[task.status] = (statusCounts[task.status] ?? 0) + 1;
+    priorityCounts[task.priority] = (priorityCounts[task.priority] ?? 0) + 1;
+    if (task.status !== "DONE" && task.status !== "NO_ACTION_NEEDED" && task.dueAt) {
+      const due = new Date(task.dueAt).getTime();
+      if (due < now.getTime()) overdueTasks.push(task);
+      else if (due <= now.getTime() + 7 * DAY) dueSoonTasks.push(task);
+    }
+  }
+  const statuses = STATUS_ORDER.map((status) => ({ status, count: statusCounts[status] }));
+  const priorities = PRIORITY_ORDER.map((priority) => ({ priority, count: priorityCounts[priority] }));
   const currentWeek = monday(now); const weeks = Array.from({ length: 4 }, (_, index) => { const start = new Date(currentWeek.getTime() + index * WEEK); return { start, end: new Date(start.getTime() + WEEK), label: index === 0 ? "This week" : weekLabel(start) }; });
   const workload = members.map((member) => {
     const { user } = member; const assigned = tasks.filter((task) => task.assigneeUserId === user.id); const active = assigned.filter((task) => task.status !== "DONE" && task.status !== "NO_ACTION_NEEDED");
