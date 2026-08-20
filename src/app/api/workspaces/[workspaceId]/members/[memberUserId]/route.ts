@@ -17,7 +17,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ wo
   try {
     const { workspaceId, memberUserId } = await params;
     const { user, role, target, subject } = await context(workspaceId, memberUserId);
-    const input = await parseJson(request, z.object({ role: roleSchema.optional(), suspended: z.boolean().optional(), customRoleId: z.string().min(1).nullable().optional(), weeklyCapacityMinutes: z.number().int().min(0).max(10080).optional() }).refine((value) => value.role !== undefined || value.suspended !== undefined || value.customRoleId !== undefined || value.weeklyCapacityMinutes !== undefined, "A role, custom role, capacity, or suspension change is required"));
+    const input = await parseJson(request, z.object({ role: roleSchema.optional(), suspended: z.boolean().optional(), customRoleId: z.string().min(1).nullable().optional(), teamGroupId: z.string().min(1).nullable().optional(), weeklyCapacityMinutes: z.number().int().min(0).max(10080).optional() }).refine((value) => value.role !== undefined || value.suspended !== undefined || value.customRoleId !== undefined || value.teamGroupId !== undefined || value.weeklyCapacityMinutes !== undefined, "A role, custom role, team group, capacity, or suspension change is required"));
     if (user.id === memberUserId && (input.role !== undefined || input.suspended !== undefined || input.customRoleId !== undefined)) throw new HttpError(409, "You cannot change your own access");
     if (input.role && !canAssignWorkspaceRole(role, input.role)) throw new HttpError(403, "Cannot assign this role");
     if (input.customRoleId !== undefined) {
@@ -25,6 +25,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ wo
       if (target.role === "OWNER") throw new HttpError(409, "Owners cannot be restricted by a custom role");
       if (input.customRoleId && !(await prisma.workspaceRoleDefinition.findFirst({ where: { id: input.customRoleId, workspaceId }, select: { id: true } }))) throw new HttpError(404, "Custom role not found");
     }
+    if (input.teamGroupId && !(await prisma.teamGroup.findFirst({ where: { id: input.teamGroupId, workspaceId }, select: { id: true } }))) throw new HttpError(404, "Team group not found");
     const removingOwnerAccess = target.role === "OWNER" && ((input.role && input.role !== "OWNER") || input.suspended === true);
     if (removingOwnerAccess && await prisma.workspaceMember.count({ where: { workspaceId, role: "OWNER", suspendedAt: null } }) <= 1) throw new HttpError(409, "A workspace must keep at least one active owner");
 
@@ -34,6 +35,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ wo
         data: {
           ...(input.role ? { role: input.role } : {}),
           ...(input.customRoleId !== undefined ? { customRoleId: input.customRoleId } : input.role ? { customRoleId: null } : {}),
+          ...(input.teamGroupId !== undefined ? { teamGroupId: input.teamGroupId } : {}),
           ...(input.suspended !== undefined ? { suspendedAt: input.suspended ? new Date() : null, suspendedByUserId: input.suspended ? user.id : null } : {}),
           ...(input.weeklyCapacityMinutes !== undefined ? { weeklyCapacityMinutes: input.weeklyCapacityMinutes } : {}),
         },
@@ -41,6 +43,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ wo
       if (input.role && input.role !== target.role) await tx.activityEvent.create({ data: { workspaceId, actorUserId: user.id, type: "MEMBER_ROLE_CHANGED", detailsJson: { targetUserId: memberUserId, from: target.role, to: input.role } } });
       if (input.suspended !== undefined && Boolean(target.suspendedAt) !== input.suspended) await tx.activityEvent.create({ data: { workspaceId, actorUserId: user.id, type: input.suspended ? "MEMBER_SUSPENDED" : "MEMBER_REACTIVATED", detailsJson: { targetUserId: memberUserId } } });
       if (input.customRoleId !== undefined && input.customRoleId !== target.customRoleId) await tx.activityEvent.create({ data: { workspaceId, actorUserId: user.id, type: "CUSTOM_ROLE_ASSIGNED", detailsJson: { targetUserId: memberUserId, customRoleId: input.customRoleId } } });
+      if (input.teamGroupId !== undefined && input.teamGroupId !== target.teamGroupId) await tx.activityEvent.create({ data: { workspaceId, actorUserId: user.id, type: "MEMBER_TEAM_GROUP_CHANGED", detailsJson: { targetUserId: memberUserId, fromTeamGroupId: target.teamGroupId, toTeamGroupId: input.teamGroupId } } });
       if (input.weeklyCapacityMinutes !== undefined && input.weeklyCapacityMinutes !== target.weeklyCapacityMinutes) await tx.activityEvent.create({ data: { workspaceId, actorUserId: user.id, type: "MEMBER_CAPACITY_CHANGED", detailsJson: { targetUserId: memberUserId, fromMinutes: target.weeklyCapacityMinutes, toMinutes: input.weeklyCapacityMinutes } } });
       return updated;
     });

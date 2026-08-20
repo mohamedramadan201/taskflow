@@ -2,16 +2,18 @@
 
 import { useState, type FormEvent } from "react";
 
-type Member = { role: string; suspendedAt: string | Date | null; customRoleId: string | null; weeklyCapacityMinutes: number; availability: { id: string; date: string | Date; availableMinutes: number; note: string | null }[]; customRole: { name: string } | null; user: { id: string; name: string | null; email: string } };
+type Member = { role: string; suspendedAt: string | Date | null; customRoleId: string | null; teamGroupId: string | null; weeklyCapacityMinutes: number; availability: { id: string; date: string | Date; availableMinutes: number; note: string | null }[]; customRole: { name: string } | null; teamGroup: { id: string; name: string } | null; user: { id: string; name: string | null; email: string } };
 type Invitation = { id: string; email: string; role: string; expiresAt: string | Date };
 type AuditEvent = { id: string; type: string; detailsJson: unknown; createdAt: string | Date; actor: { name: string | null; email: string }; task: { title: string } | null };
 type CustomRole = { id: string; name: string; description: string | null; permissions: unknown; _count?: { members: number } };
+type TeamGroup = { id: string; name: string; _count?: { members: number } };
 
-export function TeamClient({ initialMembers, initialInvitations, initialAuditEvents, initialCustomRoles, availablePermissions, role, currentUserId, workspaceId }: {
+export function TeamClient({ initialMembers, initialInvitations, initialAuditEvents, initialCustomRoles, initialTeamGroups, availablePermissions, role, currentUserId, workspaceId }: {
   initialMembers: Member[];
   initialInvitations: Invitation[];
   initialAuditEvents: AuditEvent[];
   initialCustomRoles: CustomRole[];
+  initialTeamGroups: TeamGroup[];
   availablePermissions: readonly string[];
   role: string;
   currentUserId: string;
@@ -21,6 +23,8 @@ export function TeamClient({ initialMembers, initialInvitations, initialAuditEve
   const [invitations, setInvitations] = useState(initialInvitations);
   const [auditEvents, setAuditEvents] = useState(initialAuditEvents);
   const [customRoles, setCustomRoles] = useState(initialCustomRoles);
+  const [teamGroups, setTeamGroups] = useState(initialTeamGroups);
+  const [teamGroupName, setTeamGroupName] = useState("");
   const [customRoleName, setCustomRoleName] = useState("");
   const [customRolePermissions, setCustomRolePermissions] = useState<string[]>(["WORKSPACE_VIEW", "MEMBER_VIEW"]);
   const [message, setMessage] = useState("");
@@ -34,13 +38,15 @@ export function TeamClient({ initialMembers, initialInvitations, initialAuditEve
     if (response.ok) setAuditEvents(await response.json());
   }
 
-  async function updateMember(userId: string, body: { role?: string; suspended?: boolean; weeklyCapacityMinutes?: number }) {
+  async function updateMember(userId: string, body: { role?: string; suspended?: boolean; teamGroupId?: string | null; weeklyCapacityMinutes?: number }) {
     setMessage("");
     const response = await fetch(`/api/workspaces/${workspaceId}/members/${userId}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     if (!response.ok) return setMessage((await response.json()).error);
     const updated = await response.json();
-    setMembers((items) => items.map((member) => member.user.id === userId ? { ...member, role: updated.role, suspendedAt: updated.suspendedAt, customRoleId: updated.customRoleId, weeklyCapacityMinutes: updated.weeklyCapacityMinutes, customRole: body.role ? null : member.customRole } : member));
-    setMessage(body.weeklyCapacityMinutes !== undefined ? "Weekly capacity updated." : body.role ? "Member role updated." : body.suspended ? "Member access suspended." : "Member access restored.");
+    const teamGroup = body.teamGroupId === undefined ? undefined : teamGroups.find((item) => item.id === body.teamGroupId) || null;
+    setMembers((items) => items.map((member) => member.user.id === userId ? { ...member, role: updated.role, suspendedAt: updated.suspendedAt, customRoleId: updated.customRoleId, teamGroupId: updated.teamGroupId, weeklyCapacityMinutes: updated.weeklyCapacityMinutes, customRole: body.role ? null : member.customRole, teamGroup: teamGroup === undefined ? member.teamGroup : teamGroup } : member));
+    setTeamGroups((items) => teamGroup === undefined ? items : items.map((item) => ({ ...item, _count: { members: members.filter((member) => member.teamGroupId === item.id && member.user.id !== userId).length + (teamGroup?.id === item.id ? 1 : 0) } })));
+    setMessage(body.teamGroupId !== undefined ? "Team group updated." : body.weeklyCapacityMinutes !== undefined ? "Weekly capacity updated." : body.role ? "Member role updated." : body.suspended ? "Member access suspended." : "Member access restored.");
     await refreshAudit();
   }
 
@@ -49,7 +55,9 @@ export function TeamClient({ initialMembers, initialInvitations, initialAuditEve
     setMessage("");
     const response = await fetch(`/api/workspaces/${workspaceId}/members/${userId}`, { method: "DELETE" });
     if (!response.ok) return setMessage((await response.json()).error);
+    const removed = members.find((member) => member.user.id === userId);
     setMembers((items) => items.filter((member) => member.user.id !== userId));
+    if (removed?.teamGroupId) setTeamGroups((items) => items.map((item) => item.id === removed.teamGroupId ? { ...item, _count: { members: Math.max(0, (item._count?.members || 0) - 1) } } : item));
     setMessage("Member removed from the workspace.");
     await refreshAudit();
   }
@@ -85,6 +93,27 @@ export function TeamClient({ initialMembers, initialInvitations, initialAuditEve
     await refreshAudit();
   }
 
+  async function createTeamGroup(event: FormEvent) {
+    event.preventDefault();
+    const response = await fetch(`/api/workspaces/${workspaceId}/team-groups`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: teamGroupName }) });
+    if (!response.ok) return setMessage((await response.json()).error);
+    const created = await response.json();
+    setTeamGroups((items) => [...items, created].sort((a, b) => a.name.localeCompare(b.name)));
+    setTeamGroupName("");
+    setMessage(`${created.name} team group created.`);
+    await refreshAudit();
+  }
+
+  async function deleteTeamGroup(teamGroup: TeamGroup) {
+    if (!window.confirm(`Delete the ${teamGroup.name} team group? Assigned members will become unassigned.`)) return;
+    const response = await fetch(`/api/workspaces/${workspaceId}/team-groups/${teamGroup.id}`, { method: "DELETE" });
+    if (!response.ok) return setMessage((await response.json()).error);
+    setTeamGroups((items) => items.filter((item) => item.id !== teamGroup.id));
+    setMembers((items) => items.map((member) => member.teamGroupId === teamGroup.id ? { ...member, teamGroupId: null, teamGroup: null } : member));
+    setMessage(`${teamGroup.name} team group deleted.`);
+    await refreshAudit();
+  }
+
   async function deleteCustomRole(roleId: string) {
     if (!window.confirm("Delete this custom role? Assigned members will return to their base roles.")) return;
     const response = await fetch(`/api/workspaces/${workspaceId}/roles/${roleId}`, { method: "DELETE" });
@@ -117,12 +146,13 @@ export function TeamClient({ initialMembers, initialInvitations, initialAuditEve
     {message && <div className="notice" role="status">{message}</div>}
     {canManage && <section className="invite-panel"><h2>Invite a teammate</h2><form onSubmit={invite}><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="teammate@company.com" required /><select aria-label="Invitation role" value={inviteRole} onChange={(event) => setInviteRole(event.target.value)}><option value="MEMBER">Member</option><option value="VIEWER">Viewer</option>{role === "OWNER" && <><option value="ADMIN">Admin</option><option value="OWNER">Owner</option></>}</select><button className="primary-button small">Create invitation</button></form></section>}
     {invitations.length > 0 && <section className="team-list"><h2>Pending invitations</h2>{invitations.map((item) => <article key={item.id}><span className="avatar">@</span><div><strong>{item.email}</strong><small>{item.role} · expires {new Date(item.expiresAt).toLocaleDateString()}</small></div><div className="member-actions"><span className="role-badge">Pending</span>{canManage && <button className="ghost-button danger" onClick={() => revokeInvitation(item.id)}>Revoke</button>}</div></article>)}</section>}
+    {canManage && <section className="team-groups-panel"><div><span className="eyebrow">TEAM STRUCTURE</span><h2>Team groups</h2><p>Group members by the work they support, then filter the task board by group.</p></div><form onSubmit={createTeamGroup}><input value={teamGroupName} onChange={(event) => setTeamGroupName(event.target.value)} placeholder="Group name, e.g. Catalog" minLength={2} maxLength={60} required /><button className="primary-button small">Create team group</button></form>{teamGroups.length > 0 && <div className="team-group-list">{teamGroups.map((item) => <article key={item.id}><div><strong>{item.name}</strong><small>{item._count?.members || 0} members</small></div><button className="ghost-button danger" onClick={() => deleteTeamGroup(item)}>Delete</button></article>)}</div>}</section>}
     {role === "OWNER" && <section className="custom-role-panel"><div><span className="eyebrow">FINE-GRAINED ACCESS</span><h2>Custom roles</h2><p>Create a workspace-scoped permission set. Owner-only permissions cannot be delegated.</p></div><form onSubmit={createCustomRole}><input value={customRoleName} onChange={(event) => setCustomRoleName(event.target.value)} placeholder="Role name, e.g. Project coordinator" minLength={2} maxLength={50} required /><div className="permission-grid">{availablePermissions.map((permission) => <label key={permission}><input type="checkbox" checked={customRolePermissions.includes(permission)} onChange={(event) => setCustomRolePermissions((items) => event.target.checked ? [...items, permission] : items.filter((item) => item !== permission))} />{permission.toLowerCase().replaceAll("_", " ")}</label>)}</div><button className="primary-button small">Create custom role</button></form>{customRoles.length > 0 && <div className="custom-role-list">{customRoles.map((item) => <article key={item.id}><div><strong>{item.name}</strong><small>{Array.isArray(item.permissions) ? item.permissions.length : 0} permissions · {item._count?.members || 0} members</small></div><button className="ghost-button danger" onClick={() => deleteCustomRole(item.id)}>Delete</button></article>)}</div>}</section>}
     <section className="team-list"><h2>Members</h2>{members.map((member) => {
       const targetProtected = role === "ADMIN" && ["OWNER", "ADMIN"].includes(member.role);
       const editable = canManage && member.user.id !== currentUserId && !targetProtected;
       const options = role === "OWNER" ? ["OWNER", "ADMIN", "MEMBER", "VIEWER"] : ["MEMBER", "VIEWER"];
-      return <article className={member.suspendedAt ? "member-suspended" : ""} key={member.user.id}><span className="avatar">{member.user.name?.[0] || member.user.email[0]}</span><div className="member-identity"><strong>{member.user.name || "No name"}</strong><small>{member.user.email}{member.customRole ? ` · ${member.customRole.name}` : ""}{member.suspendedAt ? " · Access suspended" : ""}</small>{canManage && <><label className="capacity-control"><span>Weekly capacity</span><input aria-label={`Weekly capacity hours for ${member.user.email}`} type="number" min="0" max="168" step="0.5" defaultValue={member.weeklyCapacityMinutes / 60} onBlur={(event) => { const minutes = Math.round(Number(event.target.value) * 60); if (Number.isFinite(minutes) && minutes !== member.weeklyCapacityMinutes) updateMember(member.user.id, { weeklyCapacityMinutes: minutes }); }} /><em>hours</em></label><form className="availability-control" onSubmit={(event) => setAvailability(event, member.user.id)}><strong>Availability exception</strong><input name="date" type="date" min={new Date().toISOString().slice(0, 10)} aria-label={`Availability date for ${member.user.email}`} required /><input name="hours" type="number" min="0" max="24" step="0.5" placeholder="Hours" aria-label="Available hours" required /><input name="note" maxLength={120} placeholder="Reason (optional)" aria-label="Availability note" /><button className="ghost-button">Save</button></form>{member.availability.length > 0 && <div className="availability-chips">{member.availability.map((item) => <span key={item.id}>{new Date(item.date).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}: {item.availableMinutes / 60}h{item.note ? ` · ${item.note}` : ""}</span>)}</div>}</>}</div><div className="member-actions">{editable ? <><select aria-label={`Role for ${member.user.email}`} value={member.role} onChange={(event) => updateMember(member.user.id, { role: event.target.value })}>{options.map((value) => <option key={value}>{value}</option>)}</select>{role === "OWNER" && member.role !== "OWNER" && <select aria-label={`Custom role for ${member.user.email}`} value={member.customRoleId || ""} onChange={(event) => assignCustomRole(member.user.id, event.target.value || null)}><option value="">Base role permissions</option>{customRoles.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select>}<button className="ghost-button" onClick={() => updateMember(member.user.id, { suspended: !member.suspendedAt })}>{member.suspendedAt ? "Restore" : "Suspend"}</button><button className="ghost-button danger" onClick={() => removeMember(member.user.id)}>Remove</button></> : <span className="role-badge">{member.customRole?.name || member.role}</span>}</div></article>;
+      return <article className={member.suspendedAt ? "member-suspended" : ""} key={member.user.id}><span className="avatar">{member.user.name?.[0] || member.user.email[0]}</span><div className="member-identity"><strong>{member.user.name || "No name"}</strong><small>{member.user.email}{member.teamGroup ? ` · ${member.teamGroup.name}` : " · No team group"}{member.customRole ? ` · ${member.customRole.name}` : ""}{member.suspendedAt ? " · Access suspended" : ""}</small>{canManage && <><label className="capacity-control"><span>Weekly capacity</span><input aria-label={`Weekly capacity hours for ${member.user.email}`} type="number" min="0" max="168" step="0.5" defaultValue={member.weeklyCapacityMinutes / 60} onBlur={(event) => { const minutes = Math.round(Number(event.target.value) * 60); if (Number.isFinite(minutes) && minutes !== member.weeklyCapacityMinutes) updateMember(member.user.id, { weeklyCapacityMinutes: minutes }); }} /><em>hours</em></label><form className="availability-control" onSubmit={(event) => setAvailability(event, member.user.id)}><strong>Availability exception</strong><input name="date" type="date" min={new Date().toISOString().slice(0, 10)} aria-label={`Availability date for ${member.user.email}`} required /><input name="hours" type="number" min="0" max="24" step="0.5" placeholder="Hours" aria-label="Available hours" required /><input name="note" maxLength={120} placeholder="Reason (optional)" aria-label="Availability note" /><button className="ghost-button">Save</button></form>{member.availability.length > 0 && <div className="availability-chips">{member.availability.map((item) => <span key={item.id}>{new Date(item.date).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}: {item.availableMinutes / 60}h{item.note ? ` · ${item.note}` : ""}</span>)}</div>}</>}</div><div className="member-actions">{canManage && !targetProtected && <select aria-label={`Team group for ${member.user.email}`} value={member.teamGroupId || ""} onChange={(event) => updateMember(member.user.id, { teamGroupId: event.target.value || null })}><option value="">No team group</option>{teamGroups.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select>}{editable ? <><select aria-label={`Role for ${member.user.email}`} value={member.role} onChange={(event) => updateMember(member.user.id, { role: event.target.value })}>{options.map((value) => <option key={value}>{value}</option>)}</select>{role === "OWNER" && member.role !== "OWNER" && <select aria-label={`Custom role for ${member.user.email}`} value={member.customRoleId || ""} onChange={(event) => assignCustomRole(member.user.id, event.target.value || null)}><option value="">Base role permissions</option>{customRoles.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select>}<button className="ghost-button" onClick={() => updateMember(member.user.id, { suspended: !member.suspendedAt })}>{member.suspendedAt ? "Restore" : "Suspend"}</button><button className="ghost-button danger" onClick={() => removeMember(member.user.id)}>Remove</button></> : <span className="role-badge">{member.customRole?.name || member.role}</span>}</div></article>;
     })}</section>
     {auditEvents.length > 0 && <section className="audit-panel"><div className="audit-heading"><div><span className="eyebrow">SECURITY HISTORY</span><h2>Audit log</h2></div><button className="ghost-button" onClick={refreshAudit}>Refresh</button></div><div className="audit-list">{auditEvents.map((event) => <article key={event.id}><span className="audit-dot" /><div><strong>{event.type.toLowerCase().replaceAll("_", " ")}</strong><p>{event.actor.name || event.actor.email}{event.task ? ` · ${event.task.title}` : ""}</p></div><time>{new Date(event.createdAt).toLocaleString()}</time></article>)}</div></section>}
   </>;

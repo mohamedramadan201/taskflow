@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { Viewport } from "next";
+import type { ReactNode } from "react";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
@@ -20,7 +21,7 @@ export const viewport: Viewport = {
   themeColor: "#163f35",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   const developmentServiceWorkerCleanup = process.env.NODE_ENV !== "production" ? "if ('serviceWorker' in navigator) { navigator.serviceWorker.getRegistrations().then(function (registrations) { registrations.forEach(function (registration) { registration.unregister(); }); }); if ('caches' in window) { caches.keys().then(function (keys) { keys.filter(function (key) { return key.indexOf('taskflow-shell-') === 0; }).forEach(function (key) { caches.delete(key); }); }); } }" : "";
   return (
     <html
