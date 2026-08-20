@@ -490,3 +490,41 @@ button:disabled { cursor: not-allowed; opacity: .58; }
   .task-insights-compact strong { font-size:15px; }
   .manager-action-center { padding:11px 12px; }
 }
+
+/* Keep the board dominant: risk review and advanced filters are secondary controls. */
+.board-page-header { margin-bottom:18px; }
+.board-page-header h1 { font-size:clamp(36px, 3.6vw, 48px); }
+.task-insight-strip { min-height:48px; margin:-2px 0 12px; padding:5px 10px; }
+.task-insight-strip > div { padding:0 12px; }
+.task-insight-strip strong { font-size:17px; }
+.manager-action-center { padding:9px 12px; margin-bottom:10px; }
+.manager-action-center-heading { min-height:40px; }
+.manager-action-center-toggle { display:flex; align-items:center; gap:14px; flex:1; min-width:0; padding:0; border:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
+.manager-action-center-label { display:grid; gap:2px; min-width:max-content; }
+.manager-action-center-label .eyebrow { font-size:9px; letter-spacing:1.5px; }
+.manager-action-center-label strong { font-size:14px; font-weight:700; }
+.manager-action-center-summary { overflow:hidden; color:var(--muted); font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.manager-action-center-toggle-label { display:flex; align-items:center; gap:5px; margin-left:auto; color:var(--green); font-size:11px; font-weight:800; white-space:nowrap; }
+.manager-action-center-toggle-label > span { font-size:15px; }
+.manager-action-center .toolbar-link { min-height:32px; padding:5px 7px; font-size:11px; }
+.manager-action-center.expanded { padding-bottom:10px; }
+.manager-action-center.expanded .manager-action-center-grid { margin-top:8px; }
+.filter-toolbar { z-index:20; }
+.more-filters-panel { position:absolute; z-index:30; top:calc(100% + 7px); right:8px; width:min(820px, calc(100vw - 48px)); margin:0; padding:10px; border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow-lg); }
+.more-filter-grid { grid-template-columns:repeat(3, minmax(150px, 1fr)); gap:8px; }
+.label-management { margin-top:6px; padding-top:6px; }
+
+@media (max-width:700px) {
+  .board-page-header { margin-bottom:14px; }
+  .board-page-header h1 { font-size:clamp(30px, 9vw, 40px); }
+  .task-insight-strip { min-height:46px; margin:-2px 0 10px; padding:4px 7px; }
+  .task-insight-strip > div { padding:0 8px; }
+  .task-insight-strip strong { font-size:15px; }
+  .manager-action-center-toggle { gap:8px; }
+  .manager-action-center-label { min-width:0; }
+  .manager-action-center-label strong { font-size:13px; }
+  .manager-action-center-summary { display:none; }
+  .manager-action-center-toggle-label { font-size:10px; }
+  .more-filters-panel { position:relative; top:auto; right:auto; width:auto; margin-top:8px; padding:10px; }
+  .more-filter-grid { grid-template-columns:1fr!important; }
+}
