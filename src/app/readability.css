@@ -617,6 +617,12 @@ body .space-add { display:flex; align-items:center; gap:9px; width:100%; min-hei
 body .space-item:hover,
 body .space-add:hover { background:#f0f1ed; color:var(--ink); }
 body .space-item.active { background:#ece8fb; color:#59499b; }
+body .sidebar .space-list-title { color:#9bb8b0; }
+body .sidebar .space-item { color:#b9d1ca; }
+body .sidebar .space-item:hover { background:#28584c; color:#fff; }
+body .sidebar .space-item.active { background:#ece8fb; color:#59499b; }
+body .sidebar .space-item:focus { outline:none; }
+body .sidebar .space-item:focus-visible { outline:3px solid #82ad9f; outline-offset:2px; }
 body .space-icon { display:grid; place-items:center; flex:0 0 17px; width:17px; height:17px; border-radius:5px; color:#fff; font-size:10px; font-weight:800; }
 body .space-item[data-tone="1"] .space-icon { background:#11a88b; }
 body .space-item[data-tone="2"] .space-icon { background:#e84b59; }
@@ -627,6 +633,21 @@ body .space-item[data-tone="6"] .space-icon { background:#ec690d; }
 body .space-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 body .space-add { margin-top:5px; color:#8d9894; }
 body .space-add > span { width:17px; color:#8d9894; font-size:17px; font-weight:400; line-height:1; text-align:center; }
+body .sidebar .space-add { color:#9bb8b0; }
+body .sidebar .space-add > span { color:#9bb8b0; }
+
+/* Invitation landing page */
+body .invite-page { min-height:100vh; display:grid; place-items:center; gap:22px; padding:32px 18px; background:var(--paper); }
+body .invite-brand { position:absolute; top:30px; left:32px; }
+body .invite-card { width:min(460px, 100%); padding:32px; background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow-lg); }
+body .invite-card h1 { margin:9px 0 10px; font-size:32px; }
+body .invite-card p { color:var(--muted); line-height:1.6; }
+body .invite-card strong { color:var(--ink); }
+body .invite-email { padding:10px 12px; border-radius:8px; background:#eef5f0; color:var(--green)!important; font-weight:700; word-break:break-word; }
+body .invite-card .primary-button { width:100%; margin-top:10px; }
+body .invite-signin { margin:18px 0 0; font-size:13px; text-align:center; }
+body .invite-signin a { color:var(--green); font-weight:700; }
+@media (max-width:600px) { body .invite-brand { position:static; } body .invite-card { padding:24px 20px; } }
 body .space-create-form { display:grid; gap:6px; margin-top:8px; padding:8px; border:1px solid #d9e0dc; border-radius:8px; background:#f7f9f6; }
 body .space-create-form input { width:100%; min-height:34px; padding:7px 8px; border:1px solid #cbd6d0; border-radius:6px; background:#fff; color:var(--ink); font:inherit; font-size:12px; }
 body .space-create-form button { min-height:34px; padding:6px 9px; border:0; border-radius:6px; background:var(--green); color:#fff; font:inherit; font-size:12px; font-weight:700; cursor:pointer; }

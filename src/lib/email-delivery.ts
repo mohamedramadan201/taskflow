@@ -19,5 +19,5 @@ export function getEmailDeliveryConfig(env: Record<string, string | undefined> =
   };
 }
 
-const labels: Record<string, string> = { TASK_REMINDER: "Task reminder", TASK_ASSIGNED: "New task assigned", SYSTEM: "TaskFlow update" };
+const labels: Record<string, string> = { TASK_REMINDER: "Task reminder", TASK_ASSIGNED: "New task assigned", WORKSPACE_INVITATION: "Workspace invitation", SYSTEM: "TaskFlow update" };
 export const buildEmailDeliverySubject = (type: string) => `[TaskFlow] ${labels[type] || "Notification"}`;

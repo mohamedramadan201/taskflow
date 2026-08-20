@@ -68,7 +68,7 @@ export function TeamClient({ initialMembers, initialInvitations, initialAuditEve
     if (!response.ok) return setMessage((await response.json()).error);
     const created = await response.json();
     setInvitations((items) => [created, ...items.filter((item) => item.email !== created.email)]);
-    setMessage(`Invitation created for ${email}`);
+    setMessage(created.emailSent ? `Invitation email sent to ${email}` : `Invitation created for ${email}, but the email could not be sent. Check SMTP configuration.`);
     setEmail("");
     await refreshAudit();
   }
