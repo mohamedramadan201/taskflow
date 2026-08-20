@@ -41,7 +41,7 @@ Seeded accounts use the password `Taskflow123!`:
 
 Immediate reminders are processed during the request. Scheduled reminders are processed through `POST /api/reminders/process` with `Authorization: Bearer <CRON_SECRET>`.
 
-Email delivery defaults to `log` mode and writes JSON lines to `EMAIL_DELIVERY_LOG_PATH`. Set `EMAIL_DELIVERY_MODE=smtp` and configure the SMTP variables to send real messages.
+Email delivery defaults to `log` mode and writes JSON lines to `EMAIL_DELIVERY_LOG_PATH`. For Google Apps Script delivery, set `GOOGLE_APPS_SCRIPT_DELIVERY_SECRET`, add the same value as `TASKFLOW_DELIVERY_SECRET` in the Apps Script project, and ensure the existing `syncTaskFlow` trigger is installed. Every trigger run claims up to 25 due reminders, sends them through Gmail, and reports each result back to TaskFlow. Reminder status and retry limits remain managed by TaskFlow.
 
 ## Gmail metadata connector
 
