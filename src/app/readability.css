@@ -584,3 +584,26 @@ body .task-count-field .task-count-input { min-height:30px; padding:5px 7px; fon
   body .task-count-options { grid-template-columns:1fr 1fr; }
   body .task-drawer { overflow:auto; }
 }
+
+/* Aptos typography with a clear, restrained hierarchy. */
+:root { --font-ui:"Aptos", "Segoe UI", Arial, sans-serif; --font-arabic:var(--font-ui); --font-geist-sans:var(--font-ui); --font-geist-mono:var(--font-ui); }
+body { font-family:var(--font-ui); }
+body :where(h1, h2, h3, h4, h5, h6) { font-weight:700; letter-spacing:-.012em; }
+body .page-header h1,
+body .task-detail-header h2,
+body .login-visual h1,
+body .login-card h2 { font-weight:700; }
+body .column-title h2,
+body .task-card h3,
+body .drawer-details > summary strong,
+body .manager-workload-section h2,
+body .risk-queue h2,
+body .manager-recommendations h2,
+body .flow-report h2,
+body .report-panels h2,
+body .workload-report h2 { font-weight:700; }
+body .eyebrow,
+body .filter-trigger,
+body .quick-filter,
+body .toolbar-menu-trigger,
+body .saved-view-control select { font-weight:700; }
