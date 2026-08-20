@@ -20,10 +20,10 @@ export function WorkspaceSwitcher({ workspaces, currentSlug }: { workspaces: Wor
     const data = new FormData(event.currentTarget);
     const name = String(data.get("name") || "").trim();
     const slug = toSlug(name);
-    if (!slug) return setError("Enter a workspace name using letters or numbers.");
+    if (!slug) return setError("Enter a space name using letters or numbers.");
     const response = await fetch("/api/workspaces", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, slug }) });
     const result = await response.json();
-    if (!response.ok) return setError(result.error || "Could not create workspace");
+    if (!response.ok) return setError(result.error || "Could not create space");
     setCreating(false);
     setError("");
     router.push(`/board?workspace=${result.slug}`);
@@ -32,5 +32,15 @@ export function WorkspaceSwitcher({ workspaces, currentSlug }: { workspaces: Wor
 
   function switchWorkspace(slug: string) { router.push(pathname === "/notifications" ? `/board?workspace=${slug}` : `${pathname}?workspace=${slug}`); }
 
-  return <div className="workspace-switcher"><label htmlFor="workspace-select">Workspace</label><div><select id="workspace-select" value={currentSlug} onChange={(event) => switchWorkspace(event.target.value)}>{workspaces.map((workspace) => <option key={workspace.id} value={workspace.slug}>{workspace.name}</option>)}</select><button type="button" aria-label="Create workspace" title="Create workspace" onClick={() => { setCreating((value) => !value); setError(""); }}>+</button></div>{creating && <form onSubmit={createWorkspace}><input name="name" aria-label="New workspace name" placeholder="Workspace name" minLength={2} maxLength={80} required autoFocus /><button>Create</button>{error && <small>{error}</small>}</form>}</div>;
+  return <section className="workspace-switcher" aria-label="Spaces">
+    <span className="space-list-title">Spaces</span>
+    <div className="space-list" role="list">
+      {workspaces.map((workspace, index) => <div key={workspace.id} role="listitem"><button type="button" className={`space-item${workspace.slug === currentSlug ? " active" : ""}`} data-tone={(index % 6) + 1} aria-current={workspace.slug === currentSlug ? "page" : undefined} onClick={() => switchWorkspace(workspace.slug)}>
+        <span className="space-icon" aria-hidden="true">{workspace.name.trim().charAt(0).toUpperCase() || "S"}</span>
+        <span className="space-name">{workspace.name}</span>
+      </button></div>)}
+    </div>
+    <button type="button" className="space-add" aria-expanded={creating} onClick={() => { setCreating((value) => !value); setError(""); }}><span aria-hidden="true">+</span> Add Space</button>
+    {creating && <form onSubmit={createWorkspace} className="space-create-form"><input name="name" aria-label="New space name" placeholder="Space name" minLength={2} maxLength={80} required autoFocus /><button>Create space</button>{error && <small role="alert">{error}</small>}</form>}
+  </section>;
 }
