@@ -60,6 +60,21 @@ export function buildManagerActionCenter(tasks: ReportTask[], workload: Array<{ 
   };
 }
 
+/**
+ * Board pages only need the manager risks, not the full eight-week report.
+ * Keep this path deliberately small so opening the board does not calculate
+ * charts, output totals, and every workload week just to render six counters.
+ */
+export function buildWorkspaceActionCenter(tasks: ReportTask[], members: ReportMember[], now = new Date(), overloadThreshold = 100) {
+  const workload = members.map((member) => {
+    const activeTasks = tasks.filter((task) => task.assigneeUserId === member.user.id && task.status !== "DONE" && task.status !== "NO_ACTION_NEEDED");
+    const remainingMinutes = activeTasks.reduce((sum, task) => sum + taskRemainingMinutes(task), 0);
+    const capacityMinutes = member.weeklyCapacityMinutes ?? 1800;
+    return { user: member.user, utilization: capacityMinutes ? Math.round((remainingMinutes / capacityMinutes) * 100) : remainingMinutes ? 999 : 0 };
+  });
+  return buildManagerActionCenter(tasks, workload, now, overloadThreshold);
+}
+
 export function reportRangeStart(range: string, now = new Date()) { return range === "all" ? undefined : new Date(now.getTime() - Number(range) * DAY); }
 export function parseCompletionDateRange(from?: string | null, to?: string | null) {
   const parseDate = (value?: string | null) => { if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return value ? null : undefined; const date = new Date(`${value}T00:00:00.000Z`); return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? null : date; };
@@ -114,8 +129,8 @@ export function buildWorkspaceReport(tasks: ReportTask[], members: ReportMember[
   return { total: tasks.length, completed, noActionNeeded: tasks.length - actionableTasks.length, completionRate: actionableTasks.length ? Math.round((completed / actionableTasks.length) * 100) : 0, overdue: overdueTasks.length, dueSoon: dueSoonTasks.length, unassigned: activeTasks.filter((task) => !task.assigneeUserId).length, blocked: activeTasks.filter((task) => task.blockedAt || task.blockerTaskId).length, unestimated: activeTasks.filter((task) => !task.estimatedMinutes).length, overloaded: workload.filter((item) => item.utilization > settings.overloadThreshold).length, statuses, priorities, workload, weeks: weeks.map(({ label, start }) => ({ label, start })), risks, flowWeeks, estimateAccuracy, productAndImageCounts, outputByMember, actionCenter };
 }
 
-export function buildWeeklyManagementSummary(tasks: ReportTask[], members: ReportMember[], now = new Date(), settings = { overloadThreshold: 100, dueSoonDays: 2, stalledAfterDays: 5 }) {
-  const report = buildWorkspaceReport(tasks, members, now, tasks, settings);
+export function buildWeeklyManagementSummary(tasks: ReportTask[], members: ReportMember[], now = new Date(), settings = { overloadThreshold: 100, dueSoonDays: 2, stalledAfterDays: 5 }, existingReport?: ReturnType<typeof buildWorkspaceReport>) {
+  const report = existingReport ?? buildWorkspaceReport(tasks, members, now, tasks, settings);
   const weekStart = monday(now);
   const weekEnd = new Date(weekStart.getTime() + WEEK);
   const inCurrentWeek = (value?: Date | string | null) => Boolean(value && new Date(value) >= weekStart && new Date(value) < weekEnd);

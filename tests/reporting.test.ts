@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildWeeklyManagementSummary, buildWorkspaceReport, parseCompletionDateRange, reportToCsv } from "../src/lib/reporting.ts";
+import { buildWeeklyManagementSummary, buildWorkspaceActionCenter, buildWorkspaceReport, parseCompletionDateRange, reportToCsv } from "../src/lib/reporting.ts";
 
 test("completion date ranges use inclusive calendar dates", () => {
   assert.deepEqual(parseCompletionDateRange("2026-08-01", "2026-08-14"), { start: new Date("2026-08-01T00:00:00.000Z"), end: new Date("2026-08-15T00:00:00.000Z") });
@@ -76,6 +76,17 @@ test("manager action center groups overdue, blocked, unassigned, urgent, unestim
   assert.equal(report.actionCenter.counts.unestimated, 1);
   assert.equal(report.actionCenter.counts.overloaded, 1);
   assert.ok(report.actionCenter.total >= 5);
+});
+
+test("board action center fast path preserves risk counts without full report data", () => {
+  const now = new Date("2026-08-14T00:00:00Z");
+  const actionCenter = buildWorkspaceActionCenter([
+    { id: "overdue", status: "TODO", priority: "MEDIUM", dueAt: "2026-08-13T00:00:00Z", assigneeUserId: "u1", estimatedMinutes: 60 },
+    { id: "unassigned", status: "TODO", priority: "LOW", dueAt: null, assigneeUserId: null, estimatedMinutes: 60 },
+  ], [{ weeklyCapacityMinutes: 60, user: { id: "u1", name: "Ahmed", email: "ahmed@example.com" } }], now);
+  assert.equal(actionCenter.counts.overdue, 1);
+  assert.equal(actionCenter.counts.unassigned, 1);
+  assert.deepEqual(actionCenter.overloadedMemberIds, []);
 });
 
 test("weekly management summary calculates current-week activity and workload", () => {

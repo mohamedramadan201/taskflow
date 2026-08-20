@@ -28,7 +28,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const [tasks, outputTasks, summaryTasks, members, workspaces] = await Promise.all([prisma.task.findMany({ where: { workspaceId: workspace.id, ...(since ? { createdAt: { gte: since } } : {}) }, select: reportTaskSelect }), outputDateFilter ? prisma.task.findMany({ where: { workspaceId: workspace.id, completedAt: outputDateFilter }, select: reportTaskSelect }) : Promise.resolve([]), prisma.task.findMany({ where: { workspaceId: workspace.id }, select: reportTaskSelect }), prisma.workspaceMember.findMany({ where: { workspaceId: workspace.id }, select: { id: true, weeklyCapacityMinutes: true, availability: { where: { date: { gte: new Date(new Date().setUTCDate(new Date().getUTCDate() - 7)) } }, select: { date: true, availableMinutes: true } }, user: { select: { id: true, name: true, email: true } } } }), listUserWorkspaces(session.user.id)]);
   const settings = { overloadThreshold: workspace.overloadThreshold, dueSoonDays: workspace.dueSoonDays, stalledAfterDays: workspace.stalledAfterDays };
   const report = buildWorkspaceReport(tasks, members, new Date(), outputTasks, settings);
-  const weeklySummary = buildWeeklyManagementSummary(summaryTasks, members, new Date(), settings);
+  const weeklySummary = buildWeeklyManagementSummary(summaryTasks, members, new Date(), settings, report);
   const maxStatus = Math.max(...report.statuses.map((item) => item.count), 1);
   const maxPriority = Math.max(...report.priorities.map((item) => item.count), 1);
   const counts = report.productAndImageCounts;

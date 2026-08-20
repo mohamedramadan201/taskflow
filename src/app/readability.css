@@ -465,3 +465,28 @@ button:disabled { cursor: not-allowed; opacity: .58; }
   .bulk-action-controls > *, .bulk-action-controls select, .bulk-date-action { flex:1 1 45%; }
 }
 @media (max-width:700px) { .no-action-hint { align-items:flex-start; } .assignment-controls { min-width:210px; } }
+
+/* Board density and fast-glance insights */
+.task-insights-compact { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; margin:-7px 0 14px; padding:8px 10px; border:1px solid #cfe2d6; border-radius:10px; background:#f7fbf8; }
+.task-insights-compact > div { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; padding:5px 10px; border-right:1px solid #dcebe1; }
+.task-insights-compact > div:last-child { border-right:0; }
+.task-insights-compact span { overflow:hidden; color:var(--muted); font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.task-insights-compact strong { color:var(--green); font-size:17px; }
+.manager-action-center { padding:12px 14px; margin-bottom:12px; }
+.manager-action-center-grid { gap:7px; margin-top:9px; }
+.manager-risk { min-height:44px; padding:8px 9px; }
+.more-filters-panel { padding:6px 8px; }
+.more-filter-grid { gap:5px; }
+.route-loading { min-height:100dvh; display:grid; place-content:center; justify-items:center; gap:8px; padding:32px; color:var(--muted); text-align:center; }
+.route-loading strong { color:var(--ink); font-size:18px; }
+.route-loading span { font-size:13px; }
+.loading-spinner { width:28px; height:28px; border:3px solid #cfe2d6; border-top-color:var(--green); border-radius:50%; animation:taskflow-spin .8s linear infinite; }
+@keyframes taskflow-spin { to { transform:rotate(360deg); } }
+
+@media (max-width:700px) {
+  .task-insights-compact { grid-template-columns:repeat(3, minmax(0, 1fr)); margin:0 0 12px; padding:6px; gap:5px; }
+  .task-insights-compact > div { display:grid; gap:1px; padding:5px 6px; }
+  .task-insights-compact span { font-size:9px; }
+  .task-insights-compact strong { font-size:15px; }
+  .manager-action-center { padding:11px 12px; }
+}
