@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildWorkspaceReport, parseCompletionDateRange, reportToCsv } from "../src/lib/reporting.ts";
+import { buildWeeklyManagementSummary, buildWorkspaceReport, parseCompletionDateRange, reportToCsv } from "../src/lib/reporting.ts";
 
 test("completion date ranges use inclusive calendar dates", () => {
   assert.deepEqual(parseCompletionDateRange("2026-08-01", "2026-08-14"), { start: new Date("2026-08-01T00:00:00.000Z"), end: new Date("2026-08-15T00:00:00.000Z") });
@@ -57,4 +57,42 @@ test("dated availability replaces only that day's share of weekly capacity", () 
   const now = new Date("2026-08-10T09:00:00Z");
   const report = buildWorkspaceReport([], [{ weeklyCapacityMinutes: 1800, availability: [{ date: "2026-08-12", availableMinutes: 0 }], user: { id: "u1", name: "Owner", email: "owner@example.com" } }], now);
   assert.equal(report.workload[0].weekly[0].capacityMinutes, 1440);
+});
+
+test("manager action center groups overdue, blocked, unassigned, urgent, unestimated, and overloaded risks", () => {
+  const now = new Date("2026-08-14T00:00:00Z");
+  const tasks = [
+    { id: "overdue", status: "TODO", priority: "MEDIUM", dueAt: "2026-08-13T00:00:00Z", assigneeUserId: "u1", estimatedMinutes: 60 },
+    { id: "blocked", status: "IN_PROGRESS", priority: "HIGH", dueAt: null, assigneeUserId: "u1", estimatedMinutes: 60, blockedAt: now },
+    { id: "urgent", status: "TODO", priority: "URGENT", dueAt: null, assigneeUserId: "u1", estimatedMinutes: 60 },
+    { id: "unassigned", status: "TODO", priority: "LOW", dueAt: null, assigneeUserId: null, estimatedMinutes: 60 },
+    { id: "unestimated", status: "TODO", priority: "LOW", dueAt: null, assigneeUserId: "u1", estimatedMinutes: null },
+  ];
+  const report = buildWorkspaceReport(tasks, [{ weeklyCapacityMinutes: 60, user: { id: "u1", name: "Ahmed", email: "ahmed@example.com" } }], now);
+  assert.equal(report.actionCenter.counts.overdue, 1);
+  assert.equal(report.actionCenter.counts.blocked, 1);
+  assert.equal(report.actionCenter.counts.unassigned, 1);
+  assert.equal(report.actionCenter.counts.urgent, 1);
+  assert.equal(report.actionCenter.counts.unestimated, 1);
+  assert.equal(report.actionCenter.counts.overloaded, 1);
+  assert.ok(report.actionCenter.total >= 5);
+});
+
+test("weekly management summary calculates current-week activity and workload", () => {
+  const now = new Date("2026-08-14T12:00:00Z");
+  const tasks = [
+    { id: "done", status: "DONE", priority: "MEDIUM", createdAt: "2026-08-10T00:00:00Z", startedAt: "2026-08-11T00:00:00Z", completedAt: "2026-08-12T00:00:00Z", dueAt: null, assigneeUserId: "u1", estimatedMinutes: 60 },
+    { id: "overdue", status: "IN_PROGRESS", priority: "URGENT", createdAt: "2026-08-01T00:00:00Z", dueAt: "2026-08-13T00:00:00Z", assigneeUserId: null, estimatedMinutes: null },
+    { id: "blocked", status: "TODO", priority: "LOW", createdAt: "2026-08-13T00:00:00Z", dueAt: null, assigneeUserId: "u1", estimatedMinutes: 120, blockedAt: now },
+  ];
+  const summary = buildWeeklyManagementSummary(tasks, [{ weeklyCapacityMinutes: 60, user: { id: "u1", name: "Ahmed", email: "ahmed@example.com" } }], now);
+  assert.equal(summary.completedThisWeek, 1);
+  assert.equal(summary.createdThisWeek, 2);
+  assert.equal(summary.openTasks, 2);
+  assert.equal(summary.overdue, 1);
+  assert.equal(summary.blocked, 1);
+  assert.equal(summary.urgentOpen, 1);
+  assert.equal(summary.unassigned, 1);
+  assert.equal(summary.overloaded, 1);
+  assert.equal(summary.averageCycleDays, 1);
 });
