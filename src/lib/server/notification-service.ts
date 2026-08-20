@@ -64,3 +64,39 @@ export async function processDueReminders(limit = 25) {
   const results = await Promise.allSettled(due.map((item) => deliverReminder(item.id)));
   return { processed: due.length, sent: results.filter((r) => r.status === "fulfilled").length, failed: results.filter((r) => r.status === "rejected").length };
 }
+
+export async function claimReminderEmailJobs(limit = 25) {
+  const due = await prisma.reminder.findMany({
+    where: { status: { in: ["PENDING", "FAILED"] }, scheduledAt: { lte: new Date() }, attempts: { lt: 3 } },
+    orderBy: { scheduledAt: "asc" }, take: limit,
+    include: { task: true, user: true },
+  });
+  const jobs = [];
+  for (const reminder of due) {
+    const claimed = await prisma.reminder.updateMany({
+      where: { id: reminder.id, status: { in: ["PENDING", "FAILED"] }, attempts: { lt: 3 } },
+      data: { status: "PROCESSING", attempts: { increment: 1 } },
+    });
+    if (!claimed.count) continue;
+    if (!reminder.user.taskReminderNotifications || !reminder.user.emailNotifications) {
+      await prisma.reminder.update({ where: { id: reminder.id }, data: { status: "CANCELLED", processedAt: new Date(), lastError: "Disabled by notification preferences" } });
+      continue;
+    }
+    const subject = buildEmailDeliverySubject("TASK_REMINDER");
+    const notification = reminder.notificationId
+      ? await prisma.notification.findUniqueOrThrow({ where: { id: reminder.notificationId } })
+      : await prisma.notification.create({ data: { workspaceId: reminder.workspaceId, userId: reminder.userId, taskId: reminder.taskId, type: "TASK_REMINDER", message: `Reminder: ${reminder.task.title}`, emailTo: reminder.user.email, emailSubject: subject } });
+    if (!reminder.notificationId) await prisma.reminder.update({ where: { id: reminder.id }, data: { notificationId: notification.id } });
+    jobs.push({ id: reminder.id, notificationId: notification.id, to: reminder.user.email, subject, text: `Reminder: ${reminder.task.title}\n\nOpen TaskFlow to review the task.` });
+  }
+  return jobs;
+}
+
+export async function completeReminderEmailJob(id: string, notificationId: string, success: boolean, error?: string) {
+  const now = new Date();
+  const message = (error || "Delivery failed").slice(0, 500);
+  return prisma.$transaction([
+    prisma.notification.update({ where: { id: notificationId }, data: { emailStatus: success ? "SENT" : "FAILED", emailSentAt: success ? now : undefined, emailAttempts: { increment: 1 }, emailLastError: success ? null : message } }),
+    prisma.reminder.update({ where: { id }, data: { status: success ? "SENT" : "FAILED", processedAt: success ? now : null, lastError: success ? null : message } }),
+  ]);
+}

@@ -1,9 +1,9 @@
 /** TaskFlow Gmail metadata connector. Requires the Advanced Gmail service (v1). */
-var TASKFLOW_KEYS = { baseUrl: "TASKFLOW_BASE_URL", connectorId: "TASKFLOW_CONNECTOR_ID", token: "TASKFLOW_CONNECTOR_TOKEN" };
+var TASKFLOW_KEYS = { baseUrl: "TASKFLOW_BASE_URL", connectorId: "TASKFLOW_CONNECTOR_ID", token: "TASKFLOW_CONNECTOR_TOKEN", deliverySecret: "TASKFLOW_DELIVERY_SECRET" };
 
 function configureTaskFlow() {
   var properties = PropertiesService.getScriptProperties();
-  var missing = Object.keys(TASKFLOW_KEYS).filter(function(key) { return !properties.getProperty(TASKFLOW_KEYS[key]); });
+  var missing = ["baseUrl", "connectorId", "token"].filter(function(key) { return !properties.getProperty(TASKFLOW_KEYS[key]); });
   if (missing.length) throw new Error("Missing Script Properties: " + missing.map(function(key) { return TASKFLOW_KEYS[key]; }).join(", ") + ". Open Project Settings, add the three TaskFlow Script Properties, then run configureTaskFlow again.");
   var result = testTaskFlowConnection();
   installTaskFlowTrigger();
@@ -18,6 +18,7 @@ function installTaskFlowTrigger() {
 function testTaskFlowConnection() { return taskflowRequest_("sync-config", "get"); }
 
 function syncTaskFlow() {
+  processTaskFlowReminderEmails();
   var config;
   try {
     config = taskflowRequest_("sync-config", "get");
@@ -38,6 +39,22 @@ function syncTaskFlow() {
     try { taskflowRequest_("ingest", "post", { historyId: config && config.historyId, emails: [], error: String(error && error.message || error).slice(0, 500) }); } catch (_) {}
     throw error;
   }
+}
+
+function processTaskFlowReminderEmails() {
+  var properties = PropertiesService.getScriptProperties(), baseUrl = properties.getProperty(TASKFLOW_KEYS.baseUrl), secret = properties.getProperty(TASKFLOW_KEYS.deliverySecret);
+  if (!baseUrl || !secret) return;
+  var options = { method: "get", headers: { "x-taskflow-delivery-token": secret }, muteHttpExceptions: true };
+  var response = UrlFetchApp.fetch(baseUrl.replace(/\/+$/, "") + "/api/reminders/email-worker?limit=25", options);
+  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) throw new Error("TaskFlow reminder worker returned " + response.getResponseCode());
+  var jobs = JSON.parse(response.getContentText()).jobs || [], results = [];
+  jobs.forEach(function(job) {
+    try { GmailApp.sendEmail(job.to, job.subject, job.text, { name: "TaskFlow" }); results.push({ id: job.id, notificationId: job.notificationId, success: true }); }
+    catch (error) { results.push({ id: job.id, notificationId: job.notificationId, success: false, error: String(error && error.message || error) }); }
+  });
+  if (!results.length) return;
+  var update = UrlFetchApp.fetch(baseUrl.replace(/\/+$/, "") + "/api/reminders/email-worker", { method: "post", headers: { "x-taskflow-delivery-token": secret }, contentType: "application/json", payload: JSON.stringify({ results: results }), muteHttpExceptions: true });
+  if (update.getResponseCode() < 200 || update.getResponseCode() >= 300) throw new Error("TaskFlow reminder result update returned " + update.getResponseCode());
 }
 
 function gmailChangesSince_(historyId) {

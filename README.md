@@ -41,7 +41,7 @@ Seeded accounts use the password `Taskflow123!`:
 
 Immediate reminders are processed during the request. Scheduled reminders are processed through `POST /api/reminders/process` with `Authorization: Bearer <CRON_SECRET>`.
 
-Email delivery defaults to `log` mode and writes JSON lines to `EMAIL_DELIVERY_LOG_PATH`. Set `EMAIL_DELIVERY_MODE=smtp` and configure the SMTP variables to send real messages.
+Email delivery defaults to `log` mode and writes JSON lines to `EMAIL_DELIVERY_LOG_PATH`. For Google Apps Script delivery, set `GOOGLE_APPS_SCRIPT_DELIVERY_SECRET`, add the same value as `TASKFLOW_DELIVERY_SECRET` in the Apps Script project, and ensure the existing `syncTaskFlow` trigger is installed. Every trigger run claims up to 25 due reminders, sends them through Gmail, and reports each result back to TaskFlow. Reminder status and retry limits remain managed by TaskFlow.
 
 ## Gmail metadata connector
 
@@ -72,3 +72,16 @@ pnpm verify:email-schema
 ```
 
 The production build regenerates the Prisma client automatically.
+
+## Go-live checklist
+
+Before inviting real users:
+
+- Set unique, high-entropy values for `AUTH_SECRET` and `CRON_SECRET` in the deployment platform.
+- Set `NEXT_PUBLIC_APP_URL` and `TASKFLOW_PUBLIC_URL` to the final HTTPS origin.
+- Use production Supabase pooler URLs and apply all reviewed Prisma migrations.
+- Configure real SMTP delivery, verify the sender domain, and confirm delivery failure handling.
+- Keep demo seed data out of production; create the first owner account through the controlled onboarding process.
+- Configure the scheduled request for `POST /api/reminders/process` with the `CRON_SECRET` bearer token.
+- Verify `/api/health`, login, workspace isolation, invitation flow, task creation, notifications, and mobile/PWA behavior in the production environment.
+- Enable GitHub branch protection and require the CI workflow to pass before merging.
