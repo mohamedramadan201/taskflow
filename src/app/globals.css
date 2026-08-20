@@ -170,6 +170,19 @@
 .manager-action-center-menu>.manager-action-center{position:absolute;z-index:30;top:calc(100% + 7px);right:0;width:min(540px,calc(100vw - 32px));padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--card);box-shadow:0 15px 35px #173c3325}.manager-action-center-menu .manager-action-center-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.manager-action-center-menu .manager-action-center-label{min-width:0}.manager-action-center-menu .manager-action-center-grid{margin-top:10px}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:700px){.board-command-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.board-command-row>.search-wrap{grid-column:1/-1;width:100%;min-width:0}.board-command-row>.toolbar-menu,.board-command-row>.manager-action-center-menu,.board-command-row>.filter-toggle,.board-command-row>.saved-view-control{width:100%}.board-command-row .toolbar-menu-trigger,.board-command-row .saved-view-control select{width:100%}.toolbar-menu-panel,.manager-action-center-menu>.manager-action-center{left:0;right:auto;width:min(520px,calc(100vw - 32px))}.saved-view-bar{justify-content:flex-start}}
+
+/* Keep every filter in one compact horizontal rail. */
+.filter-toolbar.single-row{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;overflow-y:visible;padding:10px 12px;scrollbar-width:thin;white-space:nowrap}
+.filter-toolbar.single-row>.filter-primary-row,.filter-toolbar.single-row>.more-filters-panel{display:contents}
+.filter-toolbar.single-row .filter-menu,.filter-toolbar.single-row .quick-filter,.filter-toolbar.single-row .more-filter-grid>label,.filter-toolbar.single-row .more-label-filter,.filter-toolbar.single-row .date-range,.filter-toolbar.single-row .label-management{flex:0 0 auto}
+.filter-toolbar.single-row .filter-trigger,.filter-toolbar.single-row .quick-filter{min-height:34px!important;padding:7px 9px!important}
+.filter-toolbar.single-row .more-filter-grid{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;flex:0 0 auto}
+.filter-toolbar.single-row .more-filter-grid>label,.filter-toolbar.single-row .more-label-filter{display:flex;align-items:center;gap:5px;width:140px;min-width:140px;color:var(--muted);font-size:10px;text-transform:none;letter-spacing:0}
+.filter-toolbar.single-row .more-filter-grid>label>span,.filter-toolbar.single-row .more-label-filter>span{display:none}
+.filter-toolbar.single-row .more-filter-grid select,.filter-toolbar.single-row .more-label-filter .filter-trigger{min-height:34px;padding:7px 8px;font-size:11px}
+.filter-toolbar.single-row .date-range{display:flex;align-items:center;gap:7px;margin:0}.filter-toolbar.single-row .date-range label{display:flex;align-items:center;gap:5px;white-space:nowrap}.filter-toolbar.single-row .date-range input{width:125px;padding:7px 8px;font-size:11px}
+.filter-toolbar.single-row .label-management{padding:0}.filter-toolbar.single-row .label-management form{display:flex;align-items:center}.filter-toolbar.single-row .label-management form input[name="name"]{width:120px}.filter-toolbar.single-row .label-management form input[type="color"]{width:34px;min-width:34px;height:30px}
+@media(max-width:700px){.filter-toolbar.single-row{align-items:center}.filter-toolbar.single-row .more-filter-grid>label,.filter-toolbar.single-row .more-label-filter{width:145px;min-width:145px}.filter-toolbar.single-row .filter-primary-row .filter-menu,.filter-toolbar.single-row .filter-primary-row .quick-filter{width:auto}}
 @media (max-width:420px){
   .main-content{padding-left:10px;padding-right:10px}
   .sidebar{padding-left:10px;padding-right:10px}
