@@ -16,8 +16,13 @@ export function telegramIsConfigured() {
   return Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_BOT_USERNAME && process.env.TELEGRAM_WEBHOOK_SECRET);
 }
 
+function telegramWebhookSecret() {
+  const configured = process.env.TELEGRAM_WEBHOOK_SECRET;
+  return configured ? createHash("sha256").update(configured).digest("hex") : null;
+}
+
 export function telegramWebhookIsAuthorized(request: Request) {
-  const expected = process.env.TELEGRAM_WEBHOOK_SECRET;
+  const expected = telegramWebhookSecret();
   return Boolean(expected && request.headers.get("x-telegram-bot-api-secret-token") === expected);
 }
 
@@ -33,7 +38,7 @@ export function telegramLinkUrl(token: string) {
 
 export async function registerTelegramWebhook() {
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "")).replace(/\/$/, "");
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  const secret = telegramWebhookSecret();
   if (!appUrl || !secret || !telegramIsConfigured()) throw new Error("Telegram webhook configuration is incomplete");
   return telegramApi<boolean>("setWebhook", { url: `${appUrl}/api/integrations/telegram/webhook`, secret_token: secret, allowed_updates: ["message", "callback_query"] });
 }
