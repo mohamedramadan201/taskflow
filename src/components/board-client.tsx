@@ -77,8 +77,23 @@ function useFilterMenuPosition(open: boolean) {
 
 function FilterMenu({ id, label, open, onToggle, triggerContent, triggerLabel, summary, menuRole = "group", children }: { id: string; label: string; open: boolean; onToggle: () => void; triggerContent: ReactNode; triggerLabel?: string; summary: ReactNode; menuRole?: "group" | "listbox"; children: ReactNode }) {
   const { triggerRef, menuStyle } = useFilterMenuPosition(open);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const wasOpen = useRef(false);
+  const menuReady = menuStyle !== null;
 
-  return <div className={`filter-menu ${open ? "open" : ""}`}><button ref={triggerRef} type="button" className="filter-trigger" aria-label={triggerLabel} aria-expanded={open} aria-controls={`${id}-menu`} onClick={onToggle}>{triggerContent}<span className="chevron" aria-hidden="true">⌄</span></button>{open && menuStyle && createPortal(<div className="filter-popover filter-popover-portal" id={`${id}-menu`} role={menuRole} aria-label={`${label} options`} data-filter-popover="true" style={menuStyle}><div className="filter-popover-heading"><strong>{label}</strong>{summary}</div>{children}</div>, document.body)}</div>;
+  useEffect(() => {
+    if (!open) {
+      if (wasOpen.current) triggerRef.current?.focus();
+      wasOpen.current = false;
+      return;
+    }
+    if (!menuReady) return;
+    wasOpen.current = true;
+    const frame = window.requestAnimationFrame(() => popoverRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, menuReady, triggerRef]);
+
+  return <div className={`filter-menu ${open ? "open" : ""}`}><button ref={triggerRef} type="button" className="filter-trigger" aria-label={triggerLabel} aria-expanded={open} aria-controls={`${id}-menu`} aria-haspopup={menuRole === "listbox" ? "listbox" : undefined} onClick={onToggle}>{triggerContent}<span className="chevron" aria-hidden="true">⌄</span></button>{open && menuStyle && createPortal(<div ref={popoverRef} tabIndex={-1} className="filter-popover filter-popover-portal" id={`${id}-menu`} role={menuRole} aria-label={`${label} options`} data-filter-popover="true" style={menuStyle}><div className="filter-popover-heading"><strong>{label}</strong>{summary}</div>{children}</div>, document.body)}</div>;
 }
 
 function MultiFilter({ id, label, count, open, onToggle, children }: { id: string; label: string; count: number; open: boolean; onToggle: () => void; children: ReactNode }) {

@@ -280,3 +280,16 @@
   .filter-primary-row:not(.expanded) .mobile-filter-toggle{grid-row:2}
   .filter-primary-row.expanded .mobile-filter-toggle{order:0}
 }
+
+/* Keep the compact desktop rail usable on touch devices. */
+@media (max-width:700px){
+  .board-command-row .toolbar-menu-trigger,
+  .board-command-row .saved-view-control select,
+  .filter-toolbar.single-row .filter-trigger,
+  .filter-toolbar.single-row .quick-filter,
+  .filter-toolbar.single-row .more-filter-grid select,
+  .filter-toolbar.single-row .more-label-filter .filter-trigger{min-height:44px!important}
+  .filter-toolbar.single-row .filter-popover > label,
+  .filter-toolbar.single-row .filter-popover > .filter-option{min-height:44px}
+  .board-command-row>.search-wrap{min-height:46px}
+}

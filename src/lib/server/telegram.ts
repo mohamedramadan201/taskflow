@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { hasPermission, type AuthorizationSubject, type Permission, type Role } from "@/lib/permissions";
 import { prisma } from "@/lib/server/prisma";
 import { parseTelegramCommand } from "@/lib/telegram-command";
+import { secureSecretMatches } from "@/lib/server/secure-compare";
 
 const TELEGRAM_API = "https://api.telegram.org";
 const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
@@ -23,7 +24,7 @@ function telegramWebhookSecret() {
 
 export function telegramWebhookIsAuthorized(request: Request) {
   const expected = telegramWebhookSecret();
-  return Boolean(expected && request.headers.get("x-telegram-bot-api-secret-token") === expected);
+  return secureSecretMatches(request.headers.get("x-telegram-bot-api-secret-token"), expected);
 }
 
 export function createTelegramLinkToken() {
