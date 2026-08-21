@@ -1,7 +1,9 @@
+import { randomBytes } from "node:crypto";
 import { buildEmailDeliverySubject, getEmailDeliveryConfig } from "../email-delivery";
 import { taskflowPublicUrl } from "../public-app-url";
 import { prisma } from "./prisma";
 import { buildWorkspaceInvitationEmail } from "./email-provider";
+import { hashInvitationToken } from "./invitations";
 
 const CLAIM_LEASE_MS = 10 * 60 * 1000;
 
@@ -34,10 +36,11 @@ async function prepareReminderQueue(workspaceId: string, limit: number) {
   return queued;
 }
 
-async function claimInvitation(invitation: { id: string; email: string; token: string; role: string; expiresAt: Date; workspace: { name: string }; invitedBy: { email: string } }, now: Date, publicUrl: string) {
-  const claimed = await prisma.workspaceInvitation.updateMany({ where: { id: invitation.id, acceptedAt: null, expiresAt: { gt: now }, emailStatus: { in: ["PENDING", "FAILED"] }, emailAttempts: { lt: 3 }, OR: [{ emailClaimedAt: null }, { emailClaimedAt: { lt: new Date(now.getTime() - CLAIM_LEASE_MS) } }] }, data: { emailClaimedAt: now, emailAttempts: { increment: 1 } } });
+async function claimInvitation(invitation: { id: string; email: string; tokenHash: string; role: string; expiresAt: Date; workspace: { name: string }; invitedBy: { email: string } }, now: Date, publicUrl: string) {
+  const token = randomBytes(24).toString("hex");
+  const claimed = await prisma.workspaceInvitation.updateMany({ where: { id: invitation.id, acceptedAt: null, expiresAt: { gt: now }, emailStatus: { in: ["PENDING", "FAILED"] }, emailAttempts: { lt: 3 }, OR: [{ emailClaimedAt: null }, { emailClaimedAt: { lt: new Date(now.getTime() - CLAIM_LEASE_MS) } }] }, data: { tokenHash: hashInvitationToken(token), emailClaimedAt: now, emailAttempts: { increment: 1 } } });
   if (!claimed.count) return null;
-  const email = buildWorkspaceInvitationEmail({ to: invitation.email, token: invitation.token, workspaceName: invitation.workspace.name, role: invitation.role, inviterName: invitation.invitedBy.email, publicUrl });
+  const email = buildWorkspaceInvitationEmail({ to: invitation.email, token, workspaceName: invitation.workspace.name, role: invitation.role, inviterName: invitation.invitedBy.email, publicUrl });
   return { kind: "INVITATION" as const, id: invitation.id, to: invitation.email, subject: email.subject, body: email.text };
 }
 

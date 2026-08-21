@@ -6,6 +6,27 @@ import { deliverAssignmentNotification } from "@/lib/server/notification-service
 import { prisma } from "@/lib/server/prisma";
 import { parseJson, taskInputSchema } from "@/lib/validation";
 
+const taskListSelect = { id: true, title: true, description: true, status: true, priority: true, dueAt: true, startedAt: true, completedAt: true, createdAt: true, updatedAt: true, estimatedMinutes: true, remainingMinutes: true, actualMinutes: true, blockedAt: true, blockedReason: true, blockerTaskId: true, recurrence: true, recurrenceInterval: true, updatedProductsCount: true, newProductsCount: true, updatedImagesCount: true, newImagesCount: true, createdByUserId: true, assigneeUserId: true, followUpWith: true, assignee: { select: { id: true, name: true, email: true } }, labelAssignments: { select: { label: true } } } as const;
+
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const workspaceId = url.searchParams.get("workspaceId");
+    const cursor = url.searchParams.get("cursor");
+    const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 100, 1), 200);
+    if (!workspaceId) throw new HttpError(400, "workspaceId is required");
+    await requireMembership(workspaceId);
+    let cursorData: { createdAt?: string; id?: string } | null = null;
+    if (cursor) {
+      try { cursorData = JSON.parse(cursor) as { createdAt?: string; id?: string }; } catch { throw new HttpError(400, "Invalid task cursor"); }
+    }
+    const tasks = await prisma.task.findMany({ where: { workspaceId, ...(cursorData?.createdAt && cursorData.id ? { OR: [{ createdAt: { lt: new Date(cursorData.createdAt) } }, { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } }] } : {}) }, select: taskListSelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: limit + 1 });
+    const page = tasks.slice(0, limit);
+    const last = page.at(-1);
+    return Response.json({ tasks: page.map(({ labelAssignments, ...task }) => ({ ...task, labels: labelAssignments.map(({ label }) => label) })), nextCursor: tasks.length > limit && last ? { createdAt: last.createdAt, id: last.id } : null });
+  } catch (error) { return errorResponse(error); }
+}
+
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, taskInputSchema); const { user, subject } = await requireMembership(input.workspaceId);

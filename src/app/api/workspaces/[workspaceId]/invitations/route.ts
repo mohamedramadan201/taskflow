@@ -4,6 +4,8 @@ import { getEmailDeliveryConfig } from "@/lib/email-delivery";
 import { assertPermission, HttpError, errorResponse, requireMembership } from "@/lib/server/authorization";
 import { sendWorkspaceInvitationEmail } from "@/lib/server/email-provider";
 import { prisma } from "@/lib/server/prisma";
+import { hashInvitationToken } from "@/lib/server/invitations";
+import { consumeRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { taskflowPublicUrl } from "@/lib/public-app-url";
 import { invitationSchema, parseJson } from "@/lib/validation";
 
@@ -23,17 +25,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ wor
     const { workspaceId } = await params;
     const { user, role, subject } = await requireMembership(workspaceId);
     assertPermission(subject, "MEMBER_INVITE", "Invitation creation denied");
+    const rate = await consumeRateLimit(`invitation:create:user:${user.id}`, 30, 60 * 60 * 1000);
+    if (!rate.allowed) return rateLimitResponse(rate.retryAfterSeconds);
     const input = await parseJson(request, invitationSchema);
     if (!canAssignWorkspaceRole(role, input.role)) throw new HttpError(403, "Cannot invite this role");
     const email = input.email.trim().toLowerCase();
     const token = randomBytes(24).toString("hex");
+    const tokenHash = hashInvitationToken(token);
     const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { name: true } });
     if (!workspace) throw new HttpError(404, "Workspace not found");
     if (input.teamGroupId && !(await prisma.teamGroup.findFirst({ where: { id: input.teamGroupId, workspaceId }, select: { id: true } }))) throw new HttpError(404, "Team group not found");
     const invitation = await prisma.workspaceInvitation.upsert({
       where: { workspaceId_email: { workspaceId, email } },
-      update: { role: input.role, teamGroupId: input.teamGroupId ?? null, token, invitedByUserId: user.id, expiresAt: new Date(Date.now() + 7 * 86_400_000), acceptedAt: null, acceptedByUserId: null, emailStatus: "PENDING", emailSentAt: null, emailAttempts: 0, emailLastError: null, emailClaimedAt: null },
-      create: { workspaceId, email, role: input.role, teamGroupId: input.teamGroupId ?? null, token, invitedByUserId: user.id, expiresAt: new Date(Date.now() + 7 * 86_400_000) },
+      update: { role: input.role, teamGroupId: input.teamGroupId ?? null, tokenHash, invitedByUserId: user.id, expiresAt: new Date(Date.now() + 7 * 86_400_000), acceptedAt: null, acceptedByUserId: null, emailStatus: "PENDING", emailSentAt: null, emailAttempts: 0, emailLastError: null, emailClaimedAt: null },
+      create: { workspaceId, email, role: input.role, teamGroupId: input.teamGroupId ?? null, tokenHash, invitedByUserId: user.id, expiresAt: new Date(Date.now() + 7 * 86_400_000) },
       select: safeInvitation,
     });
     await prisma.activityEvent.create({ data: { workspaceId, actorUserId: user.id, type: "INVITATION_CREATED", detailsJson: { email, role: input.role } } });

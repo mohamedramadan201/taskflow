@@ -147,7 +147,7 @@ model WorkspaceMember {
   workspace             Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user                  User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   customRole            WorkspaceRoleDefinition? @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
-  teamGroup             TeamGroup?              @relation(fields: [teamGroupId], references: [id], onDelete: SetNull)
+  teamGroup             TeamGroup?               @relation(fields: [teamGroupId], references: [id], onDelete: SetNull)
   availability          MemberAvailability[]
 
   @@unique([workspaceId, userId])
@@ -159,12 +159,12 @@ model WorkspaceMember {
 }
 
 model TeamGroup {
-  id          String           @id @default(cuid())
+  id          String                @id @default(cuid())
   workspaceId String
   name        String
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  workspace   Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   members     WorkspaceMember[]
   invitations WorkspaceInvitation[]
 
@@ -229,6 +229,7 @@ model Task {
   createdByUserId       String
   assigneeUserId        String?
   followUpWith          String?
+  telegramUpdateId      String?               @unique
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
   workspace             Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -420,11 +421,11 @@ model ChecklistItem {
 }
 
 model WorkspaceInvitation {
-  id               String        @id @default(cuid())
+  id               String         @id @default(cuid())
   workspaceId      String
   email            String
-  role             WorkspaceRole @default(MEMBER)
-  token            String        @unique
+  role             WorkspaceRole  @default(MEMBER)
+  tokenHash        String         @unique
   invitedByUserId  String
   teamGroupId      String?
   acceptedByUserId String?
@@ -435,11 +436,11 @@ model WorkspaceInvitation {
   emailAttempts    Int            @default(0)
   emailLastError   String?
   emailClaimedAt   DateTime?
-  createdAt        DateTime      @default(now())
-  workspace        Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  invitedBy        User          @relation("InvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
-  teamGroup        TeamGroup?    @relation(fields: [teamGroupId], references: [id], onDelete: SetNull)
-  acceptedBy       User?         @relation("InvitationInvitee", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime       @default(now())
+  workspace        Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy        User           @relation("InvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  teamGroup        TeamGroup?     @relation(fields: [teamGroupId], references: [id], onDelete: SetNull)
+  acceptedBy       User?          @relation("InvitationInvitee", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, email])
   @@index([email, expiresAt])
@@ -501,38 +502,61 @@ model Reminder {
 }
 
 model TelegramConnection {
-  id                 String   @id @default(cuid())
-  userId             String   @unique
-  telegramUserId     String   @unique
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  telegramUserId     String    @unique
   chatId             String
   username           String?
   firstName          String?
   defaultWorkspaceId String?
-  enabled            Boolean  @default(true)
-  linkedAt           DateTime @default(now())
+  enabled            Boolean   @default(true)
+  linkedAt           DateTime  @default(now())
   lastSeenAt         DateTime?
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([chatId])
   @@index([enabled, lastSeenAt])
 }
 
 model TelegramLinkToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  tokenHash String   @unique
+  tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
 }
 
 model TelegramUpdate {
-  id        String   @id @default(cuid())
-  updateId  String   @unique
-  createdAt DateTime @default(now())
+  id            String               @id @default(cuid())
+  updateId      String               @unique
+  status        TelegramUpdateStatus @default(PENDING)
+  attempts      Int                  @default(0)
+  lockedUntil   DateTime?
+  nextAttemptAt DateTime?
+  processedAt   DateTime?
+  lastError     String?
+  createdAt     DateTime             @default(now())
 
+  @@index([status, nextAttemptAt])
   @@index([createdAt])
+}
+
+enum TelegramUpdateStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+model RateLimitBucket {
+  key             String   @id
+  windowStartedAt DateTime
+  count           Int      @default(0)
+  expiresAt       DateTime
+
+  @@index([expiresAt])
 }

@@ -135,6 +135,8 @@
   .task-count-option{padding:12px}
 }
 
+.load-more-row{display:flex;align-items:center;justify-content:center;gap:12px;padding:18px 0;color:var(--muted);font-size:12px}.load-more-row .ghost-button{min-height:40px}
+
 /* Focused board layout: compact controls, simple cards, and a centered task modal. */
 .filter-toolbar{display:grid;gap:10px;margin:0 0 18px}
 .filter-primary-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}

@@ -3,9 +3,13 @@ import { hasPermission, type AuthorizationSubject, type Permission, type Role } 
 import { prisma } from "@/lib/server/prisma";
 import { parseTelegramCommand } from "@/lib/telegram-command";
 import { secureSecretMatches } from "@/lib/server/secure-compare";
+export { telegramRetryDelayMs } from "@/lib/server/telegram-retry";
+import { telegramRetryDelayMs } from "@/lib/server/telegram-retry";
 
 const TELEGRAM_API = "https://api.telegram.org";
 const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
+const TELEGRAM_UPDATE_LOCK_MS = 2 * 60 * 1000;
+const TELEGRAM_MAX_ATTEMPTS = 5;
 
 type TelegramReplyMarkup = { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> };
 type TelegramUpdate = { update_id?: number; message?: TelegramMessage; callback_query?: TelegramCallbackQuery };
@@ -90,13 +94,15 @@ async function setDefaultWorkspace(connectionId: string, userId: string, workspa
   return prisma.telegramConnection.update({ where: { id: connectionId }, data: { defaultWorkspaceId: workspaceId } }).then(() => membership.workspace);
 }
 
-async function createTelegramTask(connection: { id: string; userId: string; defaultWorkspaceId: string | null }, title: string) {
+async function createTelegramTask(connection: { id: string; userId: string; defaultWorkspaceId: string | null }, title: string, telegramUpdateId?: string) {
   if (!connection.defaultWorkspaceId) return { error: "Choose a space first with /spaces." } as const;
   const membership = await prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: connection.defaultWorkspaceId, userId: connection.userId } }, include: { customRole: { select: { permissions: true } }, workspace: { select: { name: true, slug: true } } } });
   if (!membership || membership.suspendedAt) return { error: "You no longer have access to the selected space." } as const;
   if (!hasPermission(workspaceSubject(membership), "TASK_CREATE")) return { error: "You do not have permission to create tasks in this space." } as const;
   const task = await prisma.$transaction(async (tx) => {
-    const created = await tx.task.create({ data: { workspaceId: connection.defaultWorkspaceId!, title, status: "TODO", priority: "MEDIUM", createdByUserId: connection.userId } });
+    const existing = telegramUpdateId ? await tx.task.findUnique({ where: { telegramUpdateId } }) : null;
+    if (existing) return existing;
+    const created = await tx.task.create({ data: { workspaceId: connection.defaultWorkspaceId!, title, status: "TODO", priority: "MEDIUM", createdByUserId: connection.userId, telegramUpdateId: telegramUpdateId ?? null } });
     await tx.activityEvent.create({ data: { workspaceId: connection.defaultWorkspaceId!, taskId: created.id, actorUserId: connection.userId, type: "TASK_CREATED_FROM_TELEGRAM", detailsJson: { title, connectionId: connection.id } } });
     return created;
   });
@@ -126,7 +132,7 @@ async function handleCallbackQuery(callback: TelegramCallbackQuery) {
   await sendTelegramMessage(connection.chatId, workspace ? `Active space set to ${workspace.name}. Send /task <title> to create a task.` : "That space is not available to your TaskFlow account.");
 }
 
-async function handleMessage(message: TelegramMessage) {
+async function handleMessage(message: TelegramMessage, telegramUpdateId?: string) {
   if (!message.from || message.chat.type !== "private") return;
   const chatId = String(message.chat.id);
   const telegramUserId = String(message.from.id);
@@ -157,21 +163,30 @@ async function handleMessage(message: TelegramMessage) {
   if (parsed.command !== "task" && parsed.command !== "note") return sendHelp(chatId);
   const title = parsed.argument;
   if (!title) return sendTelegramMessage(chatId, `Usage: /${parsed.command} <task title>`);
-  const result = await createTelegramTask(connection, title);
+  const result = await createTelegramTask(connection, title, telegramUpdateId);
   if ("error" in result) return sendTelegramMessage(chatId, result.error || "Task creation failed.");
   return sendTelegramMessage(chatId, `Task created in ${result.workspace.name}: ${result.task.title}`);
 }
 
 export async function processTelegramUpdate(update: TelegramUpdate) {
-  if (update.update_id !== undefined) {
-    const existing = await prisma.telegramUpdate.findUnique({ where: { updateId: String(update.update_id) } });
-    if (existing) return;
-    const inserted = await prisma.telegramUpdate.create({ data: { updateId: String(update.update_id) } }).catch((error: unknown) => {
-      if (error && typeof error === "object" && "code" in error && error.code === "P2002") return null;
-      throw error;
-    });
-    if (!inserted) return;
+  const telegramUpdateId = update.update_id === undefined ? null : String(update.update_id);
+  if (!telegramUpdateId) {
+    if (update.callback_query) return handleCallbackQuery(update.callback_query);
+    if (update.message) return handleMessage(update.message);
+    return;
   }
-  if (update.callback_query) return handleCallbackQuery(update.callback_query);
-  if (update.message) return handleMessage(update.message);
+  await prisma.telegramUpdate.upsert({ where: { updateId: telegramUpdateId }, create: { updateId: telegramUpdateId }, update: {} });
+  const now = new Date();
+  const claim = await prisma.telegramUpdate.updateMany({ where: { updateId: telegramUpdateId, OR: [{ status: "PENDING" }, { status: "FAILED", attempts: { lt: TELEGRAM_MAX_ATTEMPTS }, nextAttemptAt: { lte: now } }, { status: "PROCESSING", lockedUntil: { lt: now } }] }, data: { status: "PROCESSING", attempts: { increment: 1 }, lockedUntil: new Date(now.getTime() + TELEGRAM_UPDATE_LOCK_MS), lastError: null } });
+  if (claim.count !== 1) return;
+  try {
+    if (update.callback_query) await handleCallbackQuery(update.callback_query);
+    if (update.message) await handleMessage(update.message, telegramUpdateId);
+    await prisma.telegramUpdate.update({ where: { updateId: telegramUpdateId }, data: { status: "PROCESSED", processedAt: new Date(), lockedUntil: null, nextAttemptAt: null, lastError: null } });
+  } catch (error) {
+    const failed = await prisma.telegramUpdate.findUnique({ where: { updateId: telegramUpdateId }, select: { attempts: true } });
+    const attempts = failed?.attempts ?? TELEGRAM_MAX_ATTEMPTS;
+    await prisma.telegramUpdate.update({ where: { updateId: telegramUpdateId }, data: { status: "FAILED", lockedUntil: null, nextAttemptAt: attempts < TELEGRAM_MAX_ATTEMPTS ? new Date(Date.now() + telegramRetryDelayMs(attempts)) : null, lastError: error instanceof Error ? error.message.slice(0, 500) : "Telegram update failed" } });
+    throw error;
+  }
 }

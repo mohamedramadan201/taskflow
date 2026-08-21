@@ -5,6 +5,7 @@ import { canAssignWorkspaceRole } from "@/lib/permissions";
 import { sendWorkspaceInvitationEmail } from "@/lib/server/email-provider";
 import { assertPermission, errorResponse, HttpError, requireMembership } from "@/lib/server/authorization";
 import { prisma } from "@/lib/server/prisma";
+import { hashInvitationToken } from "@/lib/server/invitations";
 
 export async function POST(request: Request, { params }: { params: Promise<{ workspaceId: string; memberUserId: string }> }) {
   try {
@@ -21,8 +22,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ wor
     const token = randomBytes(24).toString("hex");
     const invitation = await prisma.workspaceInvitation.upsert({
       where: { workspaceId_email: { workspaceId, email: target.user.email } },
-      update: { role: target.role, teamGroupId: target.teamGroupId, token, invitedByUserId: access.user.id, expiresAt: new Date(Date.now() + 7 * 86_400_000), acceptedAt: null, acceptedByUserId: null, emailStatus: "PENDING", emailSentAt: null, emailAttempts: 0, emailLastError: null, emailClaimedAt: null },
-      create: { workspaceId, email: target.user.email, role: target.role, teamGroupId: target.teamGroupId, token, invitedByUserId: access.user.id, expiresAt: new Date(Date.now() + 7 * 86_400_000), emailStatus: "PENDING" },
+      update: { role: target.role, teamGroupId: target.teamGroupId, tokenHash: hashInvitationToken(token), invitedByUserId: access.user.id, expiresAt: new Date(Date.now() + 7 * 86_400_000), acceptedAt: null, acceptedByUserId: null, emailStatus: "PENDING", emailSentAt: null, emailAttempts: 0, emailLastError: null, emailClaimedAt: null },
+      create: { workspaceId, email: target.user.email, role: target.role, teamGroupId: target.teamGroupId, tokenHash: hashInvitationToken(token), invitedByUserId: access.user.id, expiresAt: new Date(Date.now() + 7 * 86_400_000), emailStatus: "PENDING" },
       select: { id: true, email: true, role: true, teamGroupId: true, expiresAt: true, emailStatus: true, emailSentAt: true },
     });
     let emailQueued = false;
