@@ -1,10 +1,10 @@
-import { assertPermission, errorResponse, HttpError, requireMembership } from "@/lib/server/authorization";
+import { assertPermission, errorResponse, HttpError, requireWorkspaceOwner } from "@/lib/server/authorization";
 import { prisma } from "@/lib/server/prisma";
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ workspaceId: string; teamGroupId: string }> }) {
   try {
     const { workspaceId, teamGroupId } = await params;
-    const { user, subject } = await requireMembership(workspaceId);
+    const { user, subject } = await requireWorkspaceOwner(workspaceId);
     assertPermission(subject, "MEMBER_MANAGE", "Team group management denied");
     const teamGroup = await prisma.teamGroup.findFirst({ where: { id: teamGroupId, workspaceId }, select: { id: true, name: true } });
     if (!teamGroup) throw new HttpError(404, "Team group not found");

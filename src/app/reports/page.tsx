@@ -22,7 +22,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const completedTo = query.completedTo || "";
   const customCompletionRange = parseCompletionDateRange(completedFrom, completedTo);
   const hasCustomCompletionRange = Boolean(completedFrom || completedTo);
-  const { workspace, subject } = await requireWorkspaceBySlug(slug, { id: session.user.id, email: session.user.email });
+  const { workspace, role, subject } = await requireWorkspaceBySlug(slug, { id: session.user.id, email: session.user.email });
+  if (role !== "OWNER") redirect(`/board?workspace=${encodeURIComponent(slug)}`);
   const since = reportRangeStart(range);
   const outputDateFilter = "error" in customCompletionRange ? null : { not: null, ...(hasCustomCompletionRange ? { ...(customCompletionRange.start ? { gte: customCompletionRange.start } : {}), ...(customCompletionRange.end ? { lt: customCompletionRange.end } : {}) } : since ? { gte: since } : {}) };
   const reportTaskSelect = { id: true, title: true, status: true, priority: true, createdAt: true, updatedAt: true, startedAt: true, completedAt: true, dueAt: true, assigneeUserId: true, estimatedMinutes: true, remainingMinutes: true, actualMinutes: true, blockedAt: true, blockedReason: true, blockerTaskId: true, updatedProductsCount: true, newProductsCount: true, updatedImagesCount: true, newImagesCount: true } as const;

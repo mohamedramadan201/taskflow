@@ -1,10 +1,10 @@
-import { assertPermission, HttpError, errorResponse, requireMembership } from "@/lib/server/authorization";
+import { assertPermission, HttpError, errorResponse, requireWorkspaceOwner } from "@/lib/server/authorization";
 import { prisma } from "@/lib/server/prisma";
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ workspaceId: string; invitationId: string }> }) {
   try {
     const { workspaceId, invitationId } = await params;
-    const access = await requireMembership(workspaceId);
+    const access = await requireWorkspaceOwner(workspaceId);
     assertPermission(access.subject, "MEMBER_INVITE", "Invitation revocation denied");
     const invitation = await prisma.workspaceInvitation.findFirst({ where: { id: invitationId, workspaceId, acceptedAt: null }, select: { id: true, email: true } });
     if (!invitation) throw new HttpError(404, "Invitation not found");

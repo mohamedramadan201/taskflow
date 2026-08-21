@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { connectorIsDue, connectorTokenMatches, createConnectorToken, emailPassesRules, hashConnectorToken } from "../src/lib/email-connectors.ts";
+import { connectorIsDue, connectorTokenMatches, createConnectorToken, dedupeInboundEmails, emailPassesRules, hashConnectorToken } from "../src/lib/email-connectors.ts";
 import { normalizePublicHttpsUrl } from "../src/lib/public-app-url.ts";
 
 const message = { senderAddress: "alerts@supplier.com", toAddresses: ["Catalog@Company.com"], ccAddresses: [], deliveredTo: [] };
@@ -31,6 +31,16 @@ test("sender and recipient includes are both required", () => {
 test("mailbox address is always a receiver candidate for BCC delivery", () => {
   const rules = [{ action: "INCLUDE", field: "RECIPIENT", matchType: "EXACT", value: "private@company.com" }] as const;
   assert.equal(emailPassesRules({ ...message, toAddresses: [] }, "private@company.com", [...rules]), true);
+});
+
+test("inbound email batches dedupe Gmail and Internet message identities", () => {
+  const emails = [
+    { gmailMessageId: "gmail-1", internetMessageId: "<same@example.com>" },
+    { gmailMessageId: "gmail-1", internetMessageId: "<same@example.com>" },
+    { gmailMessageId: "gmail-2", internetMessageId: "<SAME@example.com>" },
+    { gmailMessageId: "gmail-3", internetMessageId: "<other@example.com>" },
+  ];
+  assert.deepEqual(dedupeInboundEmails(emails).map((email) => email.gmailMessageId), ["gmail-1", "gmail-3"]);
 });
 
 test("logical schedule supports interval, manual sync, and pause", () => {

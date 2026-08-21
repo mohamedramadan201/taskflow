@@ -11,6 +11,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
   if (!session?.user?.id || !session.user.email) redirect("/login");
   const slug = (await searchParams).workspace || "taskflow-demo";
   const { workspace, role, subject } = await requireWorkspaceBySlug(slug, { id: session.user.id, email: session.user.email });
+  if (role !== "OWNER") redirect(`/board?workspace=${encodeURIComponent(slug)}`);
   const [members, invitations, auditEvents, customRoles, teamGroups, workspaces] = await Promise.all([
     prisma.workspaceMember.findMany({ where: { workspaceId: workspace.id }, select: { role: true, suspendedAt: true, customRoleId: true, teamGroupId: true, weeklyCapacityMinutes: true, availability: { where: { date: { gte: new Date(new Date().setUTCHours(0, 0, 0, 0)) } }, orderBy: { date: "asc" }, take: 8, select: { id: true, date: true, availableMinutes: true, note: true } }, customRole: { select: { name: true } }, teamGroup: { select: { id: true, name: true } }, user: { select: { id: true, name: true, email: true, accountStatus: true } } }, orderBy: { createdAt: "asc" } }),
     hasPermission(subject, "MEMBER_INVITE") ? prisma.workspaceInvitation.findMany({ where: { workspaceId: workspace.id, acceptedAt: null, expiresAt: { gt: new Date() } }, select: { id: true, email: true, role: true, teamGroupId: true, teamGroup: { select: { id: true, name: true } }, expiresAt: true }, orderBy: { createdAt: "desc" } }) : [],

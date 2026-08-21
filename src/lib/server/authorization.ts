@@ -6,6 +6,10 @@ export class HttpError extends Error { constructor(public status: number, messag
 export function assertPermission(subject: AuthorizationSubject | Role | null | undefined, permission: Permission, message = "Permission denied") {
   if (!hasPermission(subject, permission)) throw new HttpError(403, message);
 }
+export function assertWorkspaceOwner(subject: AuthorizationSubject | Role | null | undefined, message = "Workspace owner access required") {
+  const role = typeof subject === "string" ? subject : subject?.role;
+  if (role !== "OWNER") throw new HttpError(403, message);
+}
 function permissionList(value: unknown): Permission[] | null {
   if (!Array.isArray(value)) return null;
   const allowed = new Set<string>(permissions);
@@ -25,12 +29,18 @@ export async function requireMembership(workspaceId: string) {
   assertPermission(subject, "WORKSPACE_VIEW", "Workspace access denied");
   return { user, membership, role: membership.role as Role, subject };
 }
+export async function requireWorkspaceOwner(workspaceId: string) {
+  const access = await requireMembership(workspaceId);
+  assertWorkspaceOwner(access.subject);
+  return access;
+}
 export async function listUserWorkspaces(userId: string) {
-  return prisma.workspace.findMany({
+  const workspaces = await prisma.workspace.findMany({
     where: { members: { some: { userId, suspendedAt: null } } },
-    select: { id: true, name: true, slug: true },
+    select: { id: true, name: true, slug: true, members: { where: { userId, suspendedAt: null }, select: { role: true }, take: 1 } },
     orderBy: { name: "asc" },
   });
+  return workspaces.map(({ members, ...workspace }) => ({ ...workspace, role: (members[0]?.role || "VIEWER") as Role }));
 }
 export async function requireWorkspaceBySlug(slug: string, authenticatedUser?: { id: string; email: string }) {
   const user = authenticatedUser ?? await requireUser();

@@ -9,7 +9,7 @@ import { prisma } from "@/lib/server/prisma";
 export default async function EmailsPage({ searchParams }: { searchParams: Promise<{ workspace?: string }> }) {
   const session = await auth(); if (!session?.user?.id || !session.user.email) redirect("/login"); const slug = (await searchParams).workspace || "taskflow-demo";
   const access = await requireWorkspaceBySlug(slug, { id: session.user.id, email: session.user.email }); assertPermission(access.subject, "EMAIL_VIEW");
-  const canManage = hasPermission(access.subject, "EMAIL_CONNECTOR_MANAGE"); const canTriage = hasPermission(access.subject, "EMAIL_TRIAGE");
+  const canManage = access.role === "OWNER"; const canTriage = hasPermission(access.subject, "EMAIL_TRIAGE");
   const [emails, connectors, members, tasks, workspaces] = await Promise.all([
     prisma.inboundEmail.findMany({ where: { workspaceId: access.workspace.id }, include: { connector: { select: { id: true, mailboxAddress: true, displayName: true } }, task: { select: { id: true, title: true } }, handledBy: { select: { name: true, email: true } } }, orderBy: { receivedAt: "desc" }, take: 250 }),
     canManage ? prisma.emailConnector.findMany({ where: { workspaceId: access.workspace.id }, omit: { tokenHash: true }, include: { filters: { orderBy: { createdAt: "asc" } }, _count: { select: { emails: true } } }, orderBy: { createdAt: "asc" } }) : Promise.resolve([]),

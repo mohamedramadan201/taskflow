@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { customRolePermissions, permissions, type Permission } from "@/lib/permissions";
-import { assertPermission, HttpError, errorResponse, requireMembership } from "@/lib/server/authorization";
+import { assertPermission, HttpError, errorResponse, requireWorkspaceOwner } from "@/lib/server/authorization";
 import { prisma } from "@/lib/server/prisma";
 import { parseJson } from "@/lib/validation";
 
@@ -8,7 +8,7 @@ const patchSchema = z.object({ name: z.string().trim().min(2).max(50).optional()
 const allowed = new Set<Permission>(customRolePermissions);
 
 async function context(workspaceId: string, roleId: string) {
-  const access = await requireMembership(workspaceId);
+  const access = await requireWorkspaceOwner(workspaceId);
   assertPermission(access.subject, "CUSTOM_ROLE_MANAGE", "Custom role management denied");
   const customRole = await prisma.workspaceRoleDefinition.findFirst({ where: { id: roleId, workspaceId } });
   if (!customRole) throw new HttpError(404, "Custom role not found");

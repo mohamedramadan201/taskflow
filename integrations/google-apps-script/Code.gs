@@ -86,12 +86,17 @@ function gmailChangesSince_(historyId) {
 }
 
 function gmailMetadata_(id) {
-  var message = Gmail.Users.Messages.get("me", id, { format: "metadata", metadataHeaders: ["From", "To", "Cc", "Delivered-To", "X-Original-To", "Subject", "Message-ID"] });
-  var labels = message.labelIds || [];
-  if (labels.indexOf("INBOX") < 0 || ["SPAM", "TRASH", "DRAFT", "SENT"].some(function(label) { return labels.indexOf(label) >= 0; })) return null;
-  var headers = {}; ((message.payload && message.payload.headers) || []).forEach(function(header) { var key = header.name.toLowerCase(); (headers[key] || (headers[key] = [])).push(header.value); });
-  var from = parseAddresses_((headers.from || []).join(","))[0]; if (!from) return null;
-  return { gmailMessageId: message.id, gmailThreadId: message.threadId, internetMessageId: first_(headers["message-id"]), senderAddress: from.address, senderName: from.name || null, toAddresses: addressValues_(headers.to), ccAddresses: addressValues_(headers.cc), deliveredTo: addressValues_((headers["delivered-to"] || []).concat(headers["x-original-to"] || [])), subject: first_(headers.subject) || "(No subject)", snippet: String(message.snippet || "").slice(0, 1000), receivedAt: new Date(Number(message.internalDate)).toISOString() };
+  try {
+    var message = Gmail.Users.Messages.get("me", id, { format: "metadata", metadataHeaders: ["From", "To", "Cc", "Delivered-To", "X-Original-To", "Subject", "Message-ID"] });
+    var labels = message.labelIds || [];
+    if (labels.indexOf("INBOX") < 0 || ["SPAM", "TRASH", "DRAFT", "SENT"].some(function(label) { return labels.indexOf(label) >= 0; })) return null;
+    var headers = {}; ((message.payload && message.payload.headers) || []).forEach(function(header) { var key = header.name.toLowerCase(); (headers[key] || (headers[key] = [])).push(header.value); });
+    var from = parseAddresses_((headers.from || []).join(","))[0]; if (!from) return null;
+    return { gmailMessageId: message.id, gmailThreadId: message.threadId, internetMessageId: first_(headers["message-id"]), senderAddress: from.address, senderName: from.name || null, toAddresses: addressValues_(headers.to), ccAddresses: addressValues_(headers.cc), deliveredTo: addressValues_((headers["delivered-to"] || []).concat(headers["x-original-to"] || [])), subject: first_(headers.subject) || "(No subject)", snippet: String(message.snippet || "").slice(0, 1000), receivedAt: new Date(Number(message.internalDate)).toISOString() };
+  } catch (error) {
+    if (/404|requested entity was not found|not found/i.test(String(error))) { console.warn("Skipping unavailable Gmail message " + id); return null; }
+    throw error;
+  }
 }
 
 function addressValues_(values) { return parseAddresses_((values || []).join(",")).map(function(item) { return item.address; }); }

@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { canAssignWorkspaceRole } from "@/lib/permissions";
-import { assertPermission, HttpError, requireMembership, errorResponse } from "@/lib/server/authorization";
+import { assertPermission, HttpError, requireWorkspaceOwner, errorResponse } from "@/lib/server/authorization";
 import { prisma } from "@/lib/server/prisma";
 import { parseJson, roleSchema } from "@/lib/validation";
 
 async function context(workspaceId: string, memberUserId: string) {
-  const access = await requireMembership(workspaceId);
+  const access = await requireWorkspaceOwner(workspaceId);
   assertPermission(access.subject, "MEMBER_MANAGE", "Member management denied");
   const target = await prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId: memberUserId } } });
   if (!target) throw new HttpError(404, "Member not found");

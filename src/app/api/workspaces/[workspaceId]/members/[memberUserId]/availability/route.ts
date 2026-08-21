@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { assertPermission, HttpError, errorResponse, requireMembership } from "@/lib/server/authorization";
+import { assertPermission, HttpError, errorResponse, requireWorkspaceOwner } from "@/lib/server/authorization";
 import { prisma } from "@/lib/server/prisma";
 import { parseJson } from "@/lib/validation";
 
@@ -7,7 +7,7 @@ const schema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), availab
 
 export async function POST(request: Request, { params }: { params: Promise<{ workspaceId: string; memberUserId: string }> }) {
   try {
-    const { workspaceId, memberUserId } = await params; const { user, subject } = await requireMembership(workspaceId);
+    const { workspaceId, memberUserId } = await params; const { user, subject } = await requireWorkspaceOwner(workspaceId);
     assertPermission(subject, "MEMBER_MANAGE", "Availability management denied");
     const input = await parseJson(request, schema);
     const member = await prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId: memberUserId } }, select: { id: true } });

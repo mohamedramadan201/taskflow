@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { canAssignWorkspaceRole } from "@/lib/permissions";
-import { assertPermission, HttpError, requireMembership, errorResponse } from "@/lib/server/authorization";
+import { assertPermission, HttpError, requireWorkspaceOwner, errorResponse } from "@/lib/server/authorization";
 import { prisma } from "@/lib/server/prisma";
 import { parseJson, roleSchema } from "@/lib/validation";
 export async function POST(request: Request, { params }: { params: Promise<{ workspaceId: string }> }) { try {
-  const { workspaceId } = await params; const { user, role, subject } = await requireMembership(workspaceId);
+  const { workspaceId } = await params; const { user, role, subject } = await requireWorkspaceOwner(workspaceId);
   assertPermission(subject, "MEMBER_MANAGE", "Member management denied");
   const input = await parseJson(request, z.object({ email: z.string().email().transform((v) => v.trim().toLowerCase()), role: roleSchema }));
   if (!canAssignWorkspaceRole(role, input.role)) throw new HttpError(403, "Cannot assign this role");

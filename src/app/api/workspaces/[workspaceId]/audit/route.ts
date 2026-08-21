@@ -1,10 +1,10 @@
-import { assertPermission, errorResponse, requireMembership } from "@/lib/server/authorization";
+import { assertPermission, errorResponse, requireWorkspaceOwner } from "@/lib/server/authorization";
 import { prisma } from "@/lib/server/prisma";
 
 export async function GET(request: Request, { params }: { params: Promise<{ workspaceId: string }> }) {
   try {
     const { workspaceId } = await params;
-    const access = await requireMembership(workspaceId);
+    const access = await requireWorkspaceOwner(workspaceId);
     assertPermission(access.subject, "AUDIT_VIEW", "Audit log access denied");
     const limit = Math.min(Math.max(Number(new URL(request.url).searchParams.get("limit")) || 50, 1), 100);
     const events = await prisma.activityEvent.findMany({

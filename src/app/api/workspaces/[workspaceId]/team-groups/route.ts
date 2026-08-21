@@ -1,11 +1,11 @@
-import { assertPermission, errorResponse, requireMembership, HttpError } from "@/lib/server/authorization";
+import { assertPermission, errorResponse, requireWorkspaceOwner, HttpError } from "@/lib/server/authorization";
 import { prisma } from "@/lib/server/prisma";
 import { parseJson, teamGroupSchema } from "@/lib/validation";
 
 export async function POST(request: Request, { params }: { params: Promise<{ workspaceId: string }> }) {
   try {
     const { workspaceId } = await params;
-    const { user, subject } = await requireMembership(workspaceId);
+    const { user, subject } = await requireWorkspaceOwner(workspaceId);
     assertPermission(subject, "MEMBER_MANAGE", "Team group management denied");
     const input = await parseJson(request, teamGroupSchema);
     const existing = await prisma.teamGroup.findFirst({ where: { workspaceId, name: { equals: input.name, mode: "insensitive" } }, select: { id: true } });

@@ -1,4 +1,4 @@
-import { emailPassesRules } from "@/lib/email-connectors";
+import { dedupeInboundEmails, emailPassesRules } from "@/lib/email-connectors";
 import { errorResponse } from "@/lib/server/authorization";
 import { requireEmailConnector } from "@/lib/server/email-connector-auth";
 import { prisma } from "@/lib/server/prisma";
@@ -9,8 +9,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ con
     const { connectorId } = await params; const connector = await requireEmailConnector(request, connectorId); const input = await parseJson(request, emailIngestSchema); const now = new Date();
     if (input.error) { await prisma.emailConnector.update({ where: { id: connector.id }, data: { lastHeartbeatAt: now, lastError: input.error } }); return Response.json({ accepted: 0, errorRecorded: true }); }
     const accepted = input.emails.filter((email) => emailPassesRules(email, connector.mailboxAddress, connector.filters));
+    const uniqueAccepted = dedupeInboundEmails(accepted);
     const result = await prisma.$transaction(async (tx) => {
-      const created = accepted.length ? await tx.inboundEmail.createMany({ skipDuplicates: true, data: accepted.map((email) => ({ workspaceId: connector.workspaceId, connectorId: connector.id, gmailMessageId: email.gmailMessageId, gmailThreadId: email.gmailThreadId, internetMessageId: email.internetMessageId || null, senderAddress: email.senderAddress, senderName: email.senderName || null, toAddresses: [...new Set(email.toAddresses)], ccAddresses: [...new Set(email.ccAddresses)], deliveredTo: [...new Set(email.deliveredTo)], subject: email.subject || "(No subject)", snippet: email.snippet || null, receivedAt: new Date(email.receivedAt) })) }) : { count: 0 };
+      const internetMessageIds = [...new Set(uniqueAccepted.map((email) => email.internetMessageId?.trim().toLowerCase()).filter((value): value is string => Boolean(value)))];
+      const identityFilters = uniqueAccepted.length ? [
+        { connectorId: connector.id, gmailMessageId: { in: uniqueAccepted.map((email) => email.gmailMessageId) } },
+        ...(internetMessageIds.length ? [{ workspaceId: connector.workspaceId, internetMessageId: { in: internetMessageIds } }] : []),
+      ] : [];
+      const existing = identityFilters.length ? await tx.inboundEmail.findMany({ where: { OR: identityFilters.map((filter) => "internetMessageId" in filter ? { ...filter, internetMessageId: { ...filter.internetMessageId, mode: "insensitive" as const } } : filter) }, select: { gmailMessageId: true, internetMessageId: true } }) : [];
+      const existingGmailIds = new Set(existing.map((email) => email.gmailMessageId));
+      const existingInternetMessageIds = new Set(existing.map((email) => email.internetMessageId?.trim().toLowerCase()).filter((value): value is string => Boolean(value)));
+      const fresh = uniqueAccepted.filter((email) => !existingGmailIds.has(email.gmailMessageId) && !(email.internetMessageId && existingInternetMessageIds.has(email.internetMessageId.trim().toLowerCase())));
+      const created = fresh.length ? await tx.inboundEmail.createMany({ skipDuplicates: true, data: fresh.map((email) => ({ workspaceId: connector.workspaceId, connectorId: connector.id, gmailMessageId: email.gmailMessageId, gmailThreadId: email.gmailThreadId, internetMessageId: email.internetMessageId?.trim().toLowerCase() || null, senderAddress: email.senderAddress, senderName: email.senderName || null, toAddresses: [...new Set(email.toAddresses)], ccAddresses: [...new Set(email.ccAddresses)], deliveredTo: [...new Set(email.deliveredTo)], subject: email.subject || "(No subject)", snippet: email.snippet || null, receivedAt: new Date(email.receivedAt) })) }) : { count: 0 };
       await tx.emailConnector.update({ where: { id: connector.id }, data: { historyId: input.historyId, lastHeartbeatAt: now, lastSyncAt: now, lastError: null, syncRequestedAt: null } });
       return created.count;
     });

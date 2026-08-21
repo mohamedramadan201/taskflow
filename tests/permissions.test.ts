@@ -22,7 +22,17 @@ test("explicit permission sets replace role defaults", () => {
 });
 
 test("custom roles cannot delegate owner-only administration", () => {
-  for (const permission of ["WORKSPACE_DELETE", "ROLE_MANAGE", "CUSTOM_ROLE_MANAGE"] as const) assert.equal(customRolePermissions.includes(permission), false);
+  for (const permission of ["WORKSPACE_DELETE", "ROLE_MANAGE", "CUSTOM_ROLE_MANAGE", "REPORT_VIEW", "REPORT_EXPORT", "EMAIL_CONNECTOR_MANAGE"] as const) assert.equal(customRolePermissions.includes(permission), false);
+});
+
+test("reports and email connections are owner-only", () => {
+  for (const role of ["ADMIN", "MEMBER", "VIEWER"] as const) {
+    assert.equal(hasPermission(role, "REPORT_VIEW"), false);
+    assert.equal(hasPermission(role, "REPORT_EXPORT"), false);
+    assert.equal(hasPermission(role, "EMAIL_CONNECTOR_MANAGE"), false);
+  }
+  assert.equal(hasPermission("OWNER", "REPORT_VIEW"), true);
+  assert.equal(hasPermission("OWNER", "EMAIL_CONNECTOR_MANAGE"), true);
 });
 
 test("owner can assign every workspace role", () => {

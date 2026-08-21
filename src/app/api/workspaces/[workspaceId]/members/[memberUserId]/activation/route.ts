@@ -3,14 +3,14 @@ import { getEmailDeliveryConfig } from "@/lib/email-delivery";
 import { taskflowPublicUrl } from "@/lib/public-app-url";
 import { canAssignWorkspaceRole } from "@/lib/permissions";
 import { sendWorkspaceInvitationEmail } from "@/lib/server/email-provider";
-import { assertPermission, errorResponse, HttpError, requireMembership } from "@/lib/server/authorization";
+import { assertPermission, errorResponse, HttpError, requireWorkspaceOwner } from "@/lib/server/authorization";
 import { prisma } from "@/lib/server/prisma";
 import { hashInvitationToken } from "@/lib/server/invitations";
 
 export async function POST(request: Request, { params }: { params: Promise<{ workspaceId: string; memberUserId: string }> }) {
   try {
     const { workspaceId, memberUserId } = await params;
-    const access = await requireMembership(workspaceId);
+    const access = await requireWorkspaceOwner(workspaceId);
     assertPermission(access.subject, "MEMBER_MANAGE", "Member activation denied");
     const target = await prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId: memberUserId } }, include: { user: { select: { email: true, accountStatus: true } }, teamGroup: { select: { id: true, name: true } } } });
     if (!target) throw new HttpError(404, "Member not found");

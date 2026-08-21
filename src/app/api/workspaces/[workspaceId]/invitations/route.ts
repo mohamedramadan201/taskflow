@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { canAssignWorkspaceRole } from "@/lib/permissions";
 import { getEmailDeliveryConfig } from "@/lib/email-delivery";
-import { assertPermission, HttpError, errorResponse, requireMembership } from "@/lib/server/authorization";
+import { assertPermission, HttpError, errorResponse, requireWorkspaceOwner } from "@/lib/server/authorization";
 import { sendWorkspaceInvitationEmail } from "@/lib/server/email-provider";
 import { prisma } from "@/lib/server/prisma";
 import { hashInvitationToken } from "@/lib/server/invitations";
@@ -14,7 +14,7 @@ const safeInvitation = { id: true, email: true, role: true, teamGroupId: true, t
 export async function GET(_: Request, { params }: { params: Promise<{ workspaceId: string }> }) {
   try {
     const { workspaceId } = await params;
-    const { subject } = await requireMembership(workspaceId);
+    const { subject } = await requireWorkspaceOwner(workspaceId);
     assertPermission(subject, "MEMBER_INVITE", "Invitation access denied");
     return Response.json(await prisma.workspaceInvitation.findMany({ where: { workspaceId, acceptedAt: null, expiresAt: { gt: new Date() } }, select: safeInvitation, orderBy: { createdAt: "desc" } }));
   } catch (error) { return errorResponse(error); }
@@ -23,7 +23,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ workspaceI
 export async function POST(request: Request, { params }: { params: Promise<{ workspaceId: string }> }) {
   try {
     const { workspaceId } = await params;
-    const { user, role, subject } = await requireMembership(workspaceId);
+    const { user, role, subject } = await requireWorkspaceOwner(workspaceId);
     assertPermission(subject, "MEMBER_INVITE", "Invitation creation denied");
     const rate = await consumeRateLimit(`invitation:create:user:${user.id}`, 30, 60 * 60 * 1000);
     if (!rate.allowed) return rateLimitResponse(rate.retryAfterSeconds);

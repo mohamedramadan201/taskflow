@@ -28,7 +28,7 @@ export const permissions = [
 ] as const;
 
 export type Permission = (typeof permissions)[number];
-export const customRolePermissions = permissions.filter((permission) => !(["WORKSPACE_DELETE", "ROLE_MANAGE", "CUSTOM_ROLE_MANAGE"] as Permission[]).includes(permission));
+export const customRolePermissions = permissions.filter((permission) => !(["WORKSPACE_DELETE", "ROLE_MANAGE", "CUSTOM_ROLE_MANAGE", "REPORT_VIEW", "REPORT_EXPORT", "EMAIL_CONNECTOR_MANAGE"] as Permission[]).includes(permission));
 
 const allPermissions = new Set<Permission>(permissions);
 
@@ -37,12 +37,12 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, ReadonlySet<Permission>>> =
   ADMIN: new Set<Permission>([
     "WORKSPACE_VIEW", "WORKSPACE_MANAGE", "TASK_CREATE", "TASK_EDIT_ANY", "TASK_DELETE_ANY",
     "TASK_ASSIGN_ANY", "TASK_COMMENT", "TASK_CHECKLIST", "TASK_REMINDER", "MEMBER_VIEW",
-    "MEMBER_INVITE", "MEMBER_MANAGE", "REPORT_VIEW", "REPORT_EXPORT", "AUDIT_VIEW",
-    "EMAIL_VIEW", "EMAIL_TRIAGE", "EMAIL_CONNECTOR_MANAGE",
+    "MEMBER_INVITE", "MEMBER_MANAGE", "AUDIT_VIEW",
+    "EMAIL_VIEW", "EMAIL_TRIAGE",
   ]),
   MEMBER: new Set<Permission>([
     "WORKSPACE_VIEW", "TASK_CREATE", "TASK_EDIT_OWN", "TASK_DELETE_OWN", "TASK_ASSIGN_SELF",
-    "TASK_COMMENT", "TASK_CHECKLIST", "TASK_REMINDER", "MEMBER_VIEW", "REPORT_VIEW", "EMAIL_VIEW", "EMAIL_TRIAGE",
+    "TASK_COMMENT", "TASK_CHECKLIST", "TASK_REMINDER", "MEMBER_VIEW", "EMAIL_VIEW", "EMAIL_TRIAGE",
   ]),
   VIEWER: new Set<Permission>(["WORKSPACE_VIEW", "MEMBER_VIEW", "EMAIL_VIEW"]),
 };

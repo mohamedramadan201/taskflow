@@ -15,6 +15,24 @@ export type FilterableEmail = {
   deliveredTo: string[];
 };
 
+export type InboundEmailIdentity = {
+  gmailMessageId: string;
+  internetMessageId?: string | null;
+};
+
+export function dedupeInboundEmails<T extends InboundEmailIdentity>(emails: T[]) {
+  const gmailIds = new Set<string>();
+  const internetMessageIds = new Set<string>();
+  return emails.filter((email) => {
+    const gmailMessageId = email.gmailMessageId.trim();
+    const internetMessageId = email.internetMessageId?.trim().toLowerCase() || "";
+    if (!gmailMessageId || gmailIds.has(gmailMessageId) || (internetMessageId && internetMessageIds.has(internetMessageId))) return false;
+    gmailIds.add(gmailMessageId);
+    if (internetMessageId) internetMessageIds.add(internetMessageId);
+    return true;
+  });
+}
+
 export function createConnectorToken() {
   return randomBytes(32).toString("base64url");
 }

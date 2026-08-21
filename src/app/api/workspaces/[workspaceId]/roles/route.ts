@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { customRolePermissions, permissions, type Permission } from "@/lib/permissions";
-import { assertPermission, HttpError, errorResponse, requireMembership } from "@/lib/server/authorization";
+import { assertPermission, HttpError, errorResponse, requireWorkspaceOwner } from "@/lib/server/authorization";
 import { prisma } from "@/lib/server/prisma";
 import { parseJson } from "@/lib/validation";
 
@@ -14,7 +14,7 @@ const allowed = new Set<Permission>(customRolePermissions);
 export async function GET(_: Request, { params }: { params: Promise<{ workspaceId: string }> }) {
   try {
     const { workspaceId } = await params;
-    const access = await requireMembership(workspaceId);
+    const access = await requireWorkspaceOwner(workspaceId);
     assertPermission(access.subject, "MEMBER_VIEW", "Role access denied");
     return Response.json(await prisma.workspaceRoleDefinition.findMany({ where: { workspaceId }, select: { id: true, name: true, description: true, permissions: true, _count: { select: { members: true } } }, orderBy: { name: "asc" } }));
   } catch (error) { return errorResponse(error); }
@@ -23,7 +23,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ workspaceI
 export async function POST(request: Request, { params }: { params: Promise<{ workspaceId: string }> }) {
   try {
     const { workspaceId } = await params;
-    const access = await requireMembership(workspaceId);
+    const access = await requireWorkspaceOwner(workspaceId);
     assertPermission(access.subject, "CUSTOM_ROLE_MANAGE", "Custom role management denied");
     const input = await parseJson(request, roleInput);
     if (input.permissions.some((permission) => !allowed.has(permission))) throw new HttpError(403, "Custom roles cannot receive owner-only permissions");
