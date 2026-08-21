@@ -39,9 +39,9 @@ Seeded accounts use the password `Taskflow123!`:
 
 ## Reminders and email
 
-Immediate reminders are processed during the request. Scheduled reminders are processed through `POST /api/reminders/process` with `Authorization: Bearer <CRON_SECRET>`.
+Immediate reminders are processed during the request. Scheduled reminders are stored in TaskFlow and processed through `POST /api/reminders/process` with `Authorization: Bearer <CRON_SECRET>`, or through the authenticated Apps Script email queue when `EMAIL_DELIVERY_MODE=apps_script`.
 
-Email delivery defaults to `log` mode and writes JSON lines to `EMAIL_DELIVERY_LOG_PATH`. Set `EMAIL_DELIVERY_MODE=smtp` and configure the SMTP variables to send real messages.
+Email delivery defaults to `log` mode and writes JSON lines to `EMAIL_DELIVERY_LOG_PATH`. Set `EMAIL_DELIVERY_MODE=smtp` and configure the SMTP variables to send through SMTP, or set `EMAIL_DELIVERY_MODE=apps_script` to queue invitations, assignments, and reminders for the central Google Apps Script.
 
 ## Gmail metadata connector
 
@@ -53,12 +53,12 @@ The connector uses Google Apps Script and the Gmail metadata scope. It does not 
 4. Open the supplied Google Apps Script links and copy `Code.gs` and `appsscript.json` into a new standalone script owned by that Gmail account.
 5. In **Project Settings > Script Properties**, add the displayed `TASKFLOW_BASE_URL`, `TASKFLOW_CONNECTOR_ID`, and `TASKFLOW_CONNECTOR_TOKEN` values.
 6. Select the no-argument `configureTaskFlow` function in the Apps Script editor, click **Run**, and approve the metadata-only permission.
-7. Return to TaskFlow. The heartbeat should appear within one minute.
+7. Return to TaskFlow. The heartbeat should appear within one minute. The same trigger also processes queued TaskFlow email when Apps Script delivery is enabled.
 8. Configure exact-address or domain rules for senders and receivers. Exclusion rules always win; sender and receiver inclusion groups must both match.
 
 If the one-time token is lost or the connection must be reconfigured, use **Generate setup values** on the connection card. This rotates the connector token and invalidates the previous value.
 
-The Apps Script trigger wakes every minute, while TaskFlow controls the effective Gmail sync interval (1, 5, 10, 15, 30, or 60 minutes). Pausing, resuming, changing the interval, and requesting **Sync now** do not require reinstalling the Google trigger. The first successful run establishes a Gmail history cursor and imports only future messages.
+The Apps Script trigger wakes every minute, while TaskFlow controls the effective Gmail sync interval (1, 5, 10, 15, 30, or 60 minutes). Pausing, resuming, changing the interval, and requesting **Sync now** do not require reinstalling the Google trigger. The first successful run establishes a Gmail history cursor and imports only future messages. Apps Script email delivery is scoped to the connector's workspace and uses the Google account that owns the script as the sender.
 
 ## Validation
 

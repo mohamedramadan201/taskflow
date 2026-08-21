@@ -31,6 +31,7 @@ export const reminderSchema = z.object({ scheduledAt: z.string().datetime(), use
 export const commentSchema = z.object({ body: z.string().trim().min(1).max(2000) });
 export const invitationSchema = z.object({ email: z.string().email(), role: roleSchema.default("MEMBER") });
 export const invitationRegistrationSchema = z.object({ name: z.string().trim().min(2).max(80), password: z.string().min(8).max(128) });
+export const automationEmailResultSchema = z.object({ kind: z.enum(["INVITATION", "NOTIFICATION"]), id: z.string().min(1), success: z.boolean(), error: z.string().trim().max(500).optional().nullable() });
 export const teamGroupSchema = z.object({ name: z.string().trim().min(2).max(60) });
 export const checklistItemSchema = z.object({ title: z.string().trim().min(1).max(200), completed: z.boolean().optional() });
 export const notificationPreferenceSchema = z.object({ emailNotifications: z.boolean().optional(), taskReminderNotifications: z.boolean().optional() }).refine((data) => Object.keys(data).length > 0);

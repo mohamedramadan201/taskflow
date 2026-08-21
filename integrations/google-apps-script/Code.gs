@@ -11,11 +11,39 @@ function configureTaskFlow() {
 }
 
 function installTaskFlowTrigger() {
-  ScriptApp.getProjectTriggers().filter(function(trigger) { return trigger.getHandlerFunction() === "syncTaskFlow"; }).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
-  ScriptApp.newTrigger("syncTaskFlow").timeBased().everyMinutes(1).create();
+  ScriptApp.getProjectTriggers().filter(function(trigger) { return trigger.getHandlerFunction() === "runTaskFlow" || trigger.getHandlerFunction() === "syncTaskFlow" || trigger.getHandlerFunction() === "processTaskFlowQueue"; }).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
+  ScriptApp.newTrigger("runTaskFlow").timeBased().everyMinutes(1).create();
 }
 
 function testTaskFlowConnection() { return taskflowRequest_("sync-config", "get"); }
+
+function runTaskFlow() {
+  try { syncTaskFlow(); } catch (error) { console.error("TaskFlow Gmail sync failed", error); }
+  try { processTaskFlowQueue(); } catch (error) { console.error("TaskFlow email delivery failed", error); }
+}
+
+function processTaskFlowQueue() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return;
+  try {
+    var result = taskflowRequest_("automation/claim", "get"), work = result.work || [], properties = PropertiesService.getScriptProperties();
+    work.forEach(function(item) {
+      var markerKey = "TASKFLOW_SENT_" + item.kind + "_" + item.id, marker = properties.getProperty(markerKey), markerAt = Number(marker || 0);
+      if (markerAt && Date.now() - markerAt < 7 * 86_400_000) {
+        taskflowRequest_("automation/result", "post", { kind: item.kind, id: item.id, success: true });
+        return;
+      }
+      try {
+        MailApp.sendEmail({ to: item.to, subject: item.subject, body: item.body, name: "TaskFlow" });
+        properties.setProperty(markerKey, String(Date.now()));
+        taskflowRequest_("automation/result", "post", { kind: item.kind, id: item.id, success: true });
+        properties.deleteProperty(markerKey);
+      } catch (error) {
+        try { taskflowRequest_("automation/result", "post", { kind: item.kind, id: item.id, success: false, error: String(error && error.message || error).slice(0, 500) }); } catch (resultError) { console.error("TaskFlow delivery result failed", resultError); }
+      }
+    });
+  } finally { lock.releaseLock(); }
+}
 
 function syncTaskFlow() {
   var config;

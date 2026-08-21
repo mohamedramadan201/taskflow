@@ -1,4 +1,6 @@
 import { buildEmailDeliverySubject } from "../email-delivery";
+import { getEmailDeliveryConfig } from "../email-delivery";
+import { prepareDueReminderEmailQueue, prepareReminderForAppsScript } from "./email-automation";
 import { prisma } from "./prisma";
 import { sendNotificationEmail } from "./email-provider";
 
@@ -6,6 +8,7 @@ export async function deliverAssignmentNotification(notificationId: string) {
   const notification = await prisma.notification.findUnique({ where: { id: notificationId }, include: { user: true, task: true, workspace: true } });
   if (!notification || notification.type !== "TASK_ASSIGNED" || !notification.task) return notification;
   if (!notification.user.emailNotifications) return prisma.notification.update({ where: { id: notificationId }, data: { emailStatus: "SKIPPED", emailLastError: "Disabled by notification preferences" } });
+  if (getEmailDeliveryConfig().mode === "apps_script") return notification;
   try {
     await sendNotificationEmail({ to: notification.user.email, subject: notification.emailSubject || buildEmailDeliverySubject("TASK_ASSIGNED"), text: `${notification.message}\n\nWorkspace: ${notification.workspace.name}\nTask: ${notification.task.title}\n\nOpen TaskFlow to review the task.` });
     return prisma.notification.update({ where: { id: notificationId }, data: { emailStatus: "SENT", emailSentAt: new Date(), emailAttempts: { increment: 1 }, emailLastError: null } });
@@ -16,6 +19,7 @@ export async function deliverAssignmentNotification(notificationId: string) {
 }
 
 export async function deliverReminder(reminderId: string) {
+  if (getEmailDeliveryConfig().mode === "apps_script") return prepareReminderForAppsScript(reminderId);
   const reminder = await prisma.reminder.findUnique({ where: { id: reminderId }, include: { task: true, user: true } });
   if (!reminder || reminder.status === "SENT" || reminder.status === "CANCELLED") return reminder;
   const claimed = await prisma.reminder.updateMany({
@@ -60,6 +64,11 @@ export async function deliverReminder(reminderId: string) {
 }
 
 export async function processDueReminders(limit = 25) {
+  if (getEmailDeliveryConfig().mode === "apps_script") {
+    const workspaces = await prisma.workspace.findMany({ select: { id: true } });
+    const queued = (await Promise.all(workspaces.map((workspace) => prepareDueReminderEmailQueue(workspace.id, limit)))).reduce((total, count) => total + count, 0);
+    return { processed: queued, sent: 0, failed: 0, queued };
+  }
   const due = await prisma.reminder.findMany({ where: { status: { in: ["PENDING", "FAILED"] }, scheduledAt: { lte: new Date() }, attempts: { lt: 3 } }, orderBy: { scheduledAt: "asc" }, take: limit });
   const results = await Promise.allSettled(due.map((item) => deliverReminder(item.id)));
   return { processed: due.length, sent: results.filter((r) => r.status === "fulfilled").length, failed: results.filter((r) => r.status === "rejected").length };

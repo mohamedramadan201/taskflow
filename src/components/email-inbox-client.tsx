@@ -60,14 +60,14 @@ export function EmailInboxClient({ initialEmails, initialConnectors, members, ta
           <li>Open <a href="https://script.google.com/home/projects/create" target="_blank" rel="noreferrer">Google Apps Script</a> while signed into the mailbox.</li>
           <li>Copy the latest <a href="/api/email-connectors/apps-script/code" target="_blank">Code.gs</a> and <a href="/api/email-connectors/apps-script/manifest" target="_blank">appsscript.json</a> into the project.</li>
           <li>Open <b>Project Settings → Script Properties</b>, add the three values below, and save.</li>
-          <li>Select <code>configureTaskFlow</code>, click <b>Run</b>, and approve Google&apos;s metadata-only permission.</li>
+          <li>Select <code>configureTaskFlow</code>, click <b>Run</b>, and approve Gmail metadata, email sending, HTTP, and trigger permissions.</li>
         </ol>
         <div className="setup-properties">
           <label><strong>TASKFLOW_BASE_URL</strong><input type="url" value={setupBaseUrl} onChange={(event) => setSetupBaseUrl(event.target.value)} placeholder="https://your-taskflow-domain.example" aria-invalid={!isPublicHttpsUrl(setupBaseUrl)} /></label>
           <p><strong>TASKFLOW_CONNECTOR_ID</strong><code>{setup.connectorId}</code></p>
           <p><strong>TASKFLOW_CONNECTOR_TOKEN</strong><code>{setup.connectorToken}</code></p>
         </div>
-        <p className="security-note">The token is shown once and is stored only in Apps Script Properties. Because it appeared in your screenshot, generate new setup values before the final connection.</p>
+        <p className="security-note">The token is shown once and is stored only in Apps Script Properties. The same script can sync this mailbox and send queued TaskFlow invitations and reminders when Apps Script delivery is enabled.</p>
         <button className="primary-button" disabled={!isPublicHttpsUrl(setupBaseUrl)} onClick={() => navigator.clipboard.writeText(`TASKFLOW_BASE_URL=${new URL(setupBaseUrl).origin}\nTASKFLOW_CONNECTOR_ID=${setup.connectorId}\nTASKFLOW_CONNECTOR_TOKEN=${setup.connectorToken}`)}>Copy property values</button>
       </aside>
     </div>}

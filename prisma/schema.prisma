@@ -420,6 +420,11 @@ model WorkspaceInvitation {
   acceptedByUserId String?
   expiresAt        DateTime
   acceptedAt       DateTime?
+  emailSentAt      DateTime?
+  emailStatus      DeliveryStatus @default(PENDING)
+  emailAttempts    Int            @default(0)
+  emailLastError   String?
+  emailClaimedAt   DateTime?
   createdAt        DateTime      @default(now())
   workspace        Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   invitedBy        User          @relation("InvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
@@ -430,6 +435,7 @@ model WorkspaceInvitation {
   @@index([workspaceId, acceptedAt, createdAt])
   @@index([invitedByUserId])
   @@index([acceptedByUserId])
+  @@index([emailStatus, expiresAt])
 }
 
 model Notification {
@@ -446,6 +452,7 @@ model Notification {
   emailStatus    DeliveryStatus   @default(PENDING)
   emailAttempts  Int              @default(0)
   emailLastError String?
+  emailClaimedAt DateTime?
   createdAt      DateTime         @default(now())
   workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)

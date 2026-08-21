@@ -1,9 +1,11 @@
 export type EmailDeliveryConfig =
   | { mode: "log"; from: string; logPath: string }
+  | { mode: "apps_script"; from: string }
   | { mode: "smtp"; from: string; host: string; port: number; secure: boolean; user?: string; pass?: string };
 
 export function getEmailDeliveryConfig(env: Record<string, string | undefined> = process.env): EmailDeliveryConfig {
   const from = env.EMAIL_FROM?.trim() || "TaskFlow <notifications@taskflow.local>";
+  if (env.EMAIL_DELIVERY_MODE?.toLowerCase() === "apps_script") return { mode: "apps_script", from };
   if (env.EMAIL_DELIVERY_MODE?.toLowerCase() !== "smtp") {
     return { mode: "log", from, logPath: env.EMAIL_DELIVERY_LOG_PATH?.trim() || "./var/email-delivery.jsonl" };
   }
