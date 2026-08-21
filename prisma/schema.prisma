@@ -105,6 +105,8 @@ model User {
   savedTaskViews            SavedTaskView[]
   emailConnectorsCreated    EmailConnector[]      @relation("EmailConnectorCreator")
   inboundEmailsHandled      InboundEmail[]        @relation("InboundEmailHandler")
+  telegramConnection        TelegramConnection?
+  telegramLinkTokens        TelegramLinkToken[]
 }
 
 model Workspace {
@@ -496,4 +498,41 @@ model Reminder {
   @@index([taskId])
   @@index([userId])
   @@index([status, scheduledAt])
+}
+
+model TelegramConnection {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  telegramUserId     String   @unique
+  chatId             String
+  username           String?
+  firstName          String?
+  defaultWorkspaceId String?
+  enabled            Boolean  @default(true)
+  linkedAt           DateTime @default(now())
+  lastSeenAt         DateTime?
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([chatId])
+  @@index([enabled, lastSeenAt])
+}
+
+model TelegramLinkToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model TelegramUpdate {
+  id        String   @id @default(cuid())
+  updateId  String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }

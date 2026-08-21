@@ -12,6 +12,7 @@ TaskFlow is a multi-workspace task-management application built with Next.js 16,
 - In-app reminders, optional email delivery, and per-user notification preferences.
 - Workspace reports covering completion, overdue work, priority, workload, and CSV export.
 - A metadata-only Gmail inbox with sender/receiver rules, configurable schedules, health monitoring, and atomic email-to-task conversion.
+- Telegram bot integration for linking a user account and creating tasks from `/task` or `/note`.
 
 ## Local setup with Supabase
 
@@ -42,6 +43,26 @@ Seeded accounts use the password `Taskflow123!`:
 Immediate reminders are processed during the request. Scheduled reminders are stored in TaskFlow and processed through `POST /api/reminders/process` with `Authorization: Bearer <CRON_SECRET>`, or through the authenticated Apps Script email queue when `EMAIL_DELIVERY_MODE=apps_script`.
 
 Email delivery defaults to `log` mode and writes JSON lines to `EMAIL_DELIVERY_LOG_PATH`. Set `EMAIL_DELIVERY_MODE=smtp` and configure the SMTP variables to send through SMTP, or set `EMAIL_DELIVERY_MODE=apps_script` to queue invitations, assignments, and reminders for the central Google Apps Script.
+
+## Telegram task capture
+
+The Telegram MVP uses a private bot chat. It does not log in to or impersonate a user's personal Telegram account; the bot receives commands and creates tasks as the linked TaskFlow user.
+
+1. Create a bot with `@BotFather` and set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_BOT_USERNAME` in the deployment environment. Do not include the leading `@` in the username.
+2. Set a random `TELEGRAM_WEBHOOK_SECRET` and deploy TaskFlow at a public HTTPS URL.
+3. Register the webhook with Telegram:
+
+   ```sh
+   curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+     -d "url=$NEXT_PUBLIC_APP_URL/api/integrations/telegram/webhook" \
+     -d "secret_token=$TELEGRAM_WEBHOOK_SECRET" \
+     -d 'allowed_updates=["message","callback_query"]'
+   ```
+
+4. Open **Notifications > Capture tasks from Telegram**, choose **Connect Telegram**, open the generated bot link, and press **Start**.
+5. Choose a space with `/spaces`, then use `/task Prepare the launch brief` or `/note Follow up with Ahmed`.
+
+The webhook is protected by Telegram's secret-token header, link tokens expire after 15 minutes, and repeated Telegram updates are ignored using their update ID. The bot currently supports private chats and creates TODO tasks with Medium priority; richer task fields can be added after the connection flow is validated.
 
 ## Gmail metadata connector
 
