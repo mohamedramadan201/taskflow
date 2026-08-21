@@ -29,7 +29,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ALTER TABLE "WorkspaceInvitation" ADD COLUMN "tokenHash" TEXT;
 UPDATE "WorkspaceInvitation" SET "tokenHash" = encode(digest("token", 'sha256'), 'hex');
 ALTER TABLE "WorkspaceInvitation" ALTER COLUMN "tokenHash" SET NOT NULL;
-DROP INDEX IF EXISTS "WorkspaceInvitation_token_key";
+ALTER TABLE "WorkspaceInvitation" DROP CONSTRAINT IF EXISTS "WorkspaceInvitation_token_key";
 ALTER TABLE "WorkspaceInvitation" DROP COLUMN "token";
 CREATE UNIQUE INDEX "WorkspaceInvitation_tokenHash_key" ON "WorkspaceInvitation"("tokenHash");
 
