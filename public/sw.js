@@ -1,4 +1,4 @@
-const CACHE_NAME = "taskflow-shell-v1";
+const CACHE_NAME = "taskflow-shell-v2";
 const STATIC_ASSETS = ["/offline.html", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -20,10 +20,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/")) {
-    event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+    event.respondWith(fetch(request).then((response) => {
       const copy = response.clone();
       void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
       return response;
-    })));
+    }).catch(() => caches.match(request)));
   }
 });
