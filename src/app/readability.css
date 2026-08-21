@@ -184,6 +184,7 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .attention-filter { border-color: #e0a477; background: #fff8f1; color: #8b4b1e; }
 .attention-filter.active { border-color: var(--orange); background: var(--orange); color: white; }
 .filter-popover { position: absolute; z-index: 35; top: calc(100% + 8px); left: 0; width: 248px; min-width: 248px; max-height: 320px; display: grid; gap: 4px; overflow: auto; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); box-shadow: var(--shadow-lg); }
+.filter-popover-portal { position: fixed; z-index: 1000; top: auto; left: auto; width: min(248px, calc(100vw - 24px)); min-width: 0; max-height: min(320px, calc(100vh - 24px)); }
 .filter-menu:nth-of-type(4) .filter-popover { left: auto; right: 0; }
 .filter-popover-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 5px 7px 9px; border-bottom: 1px solid var(--line); }
 .filter-popover-heading strong { font-size: 13px; }

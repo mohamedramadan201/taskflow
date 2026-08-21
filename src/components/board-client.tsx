@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { BulkTaskToolbar, type BulkAction } from "@/components/bulk-task-toolbar";
 import { ManagerActionCenter } from "@/components/manager-action-center";
 import type { ManagerActionRisk } from "@/lib/reporting";
@@ -41,7 +42,37 @@ function dueLabel(value: string | Date | null, done = false) { if (!value) retur
 function needsAttention(task: Task, now = new Date()) { if (task.status === "NO_ACTION_NEEDED") return false; const overdue = !!task.dueAt && task.status !== "DONE" && new Date(task.dueAt) < now; const soon = !!task.dueAt && task.status !== "DONE" && inRange(task.dueAt, now, addDays(now, 2)); const stalled = task.status === "IN_PROGRESS" && !task.dueAt; return overdue || soon || task.priority === "URGENT" || !task.assigneeUserId || stalled || Boolean(task.blockedAt || task.blockerTaskId) || !task.estimatedMinutes; }
 
 function MultiFilter({ id, label, count, open, onToggle, children }: { id: string; label: string; count: number; open: boolean; onToggle: () => void; children: ReactNode }) {
-  return <div className={`filter-menu ${open ? "open" : ""}`}><button type="button" className="filter-trigger" aria-expanded={open} aria-controls={`${id}-menu`} onClick={onToggle}><span>{label}</span>{count > 0 && <strong>{count}</strong>}<span className="chevron" aria-hidden="true">⌄</span></button>{open && <div className="filter-popover" id={`${id}-menu`} role="group" aria-label={`${label} options`}><div className="filter-popover-heading"><strong>{label}</strong><span>{count ? `${count} selected` : "Select one or more"}</span></div>{children}</div>}</div>;
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function updateMenuPosition() {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const menuWidth = Math.min(248, window.innerWidth - 24);
+      const left = Math.min(Math.max(12, rect.left), Math.max(12, window.innerWidth - menuWidth - 12));
+      const menuHeight = Math.min(320, Math.max(96, window.innerHeight - 32));
+      const opensAbove = rect.bottom + 8 + menuHeight > window.innerHeight && rect.top > menuHeight + 8;
+      setMenuStyle({
+        top: opensAbove ? Math.max(12, rect.top - menuHeight - 8) : rect.bottom + 8,
+        left,
+        width: menuWidth,
+      });
+    }
+
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [open]);
+
+  return <div className={`filter-menu ${open ? "open" : ""}`}><button ref={triggerRef} type="button" className="filter-trigger" aria-expanded={open} aria-controls={`${id}-menu`} onClick={onToggle}><span>{label}</span>{count > 0 && <strong>{count}</strong>}<span className="chevron" aria-hidden="true">⌄</span></button>{open && menuStyle && createPortal(<div className="filter-popover filter-popover-portal" id={`${id}-menu`} role="group" aria-label={`${label} options`} data-filter-popover="true" style={menuStyle}><div className="filter-popover-heading"><strong>{label}</strong><span>{count ? `${count} selected` : "Select one or more"}</span></div>{children}</div>, document.body)}</div>;
 }
 
 export function BoardClient({ initialTasks, members, role, canManageWorkspace: canManageWorkspaceProp, managerActionCenter, workspaceId, currentUserId, initialLabels, initialSavedViews }: { initialTasks: Task[]; members: Member[]; role: string; canManageWorkspace: boolean; managerActionCenter: ActionCenterData; workspaceId: string; currentUserId: string; initialLabels: Label[]; initialSavedViews: SavedView[] }) {
@@ -92,7 +123,7 @@ export function BoardClient({ initialTasks, members, role, canManageWorkspace: c
   }, [tasks]);
 
   useEffect(() => {
-    function closeFloatingControls(event: PointerEvent) { if (!controlsRef.current?.contains(event.target as Node)) { setOpenFilter(null); setShowSaveView(false); setOpenCommandMenu(null); } }
+    function closeFloatingControls(event: PointerEvent) { const target = event.target as Node; if (target instanceof Element && target.closest("[data-filter-popover]")) return; if (!controlsRef.current?.contains(target)) { setOpenFilter(null); setShowSaveView(false); setOpenCommandMenu(null); } }
     function closeOnEscape(event: KeyboardEvent) { if (event.key === "Escape") { setOpenFilter(null); setShowSaveView(false); setOpenCommandMenu(null); setShowLabelManager(false); setSelected(null); } }
     document.addEventListener("pointerdown", closeFloatingControls);
     document.addEventListener("keydown", closeOnEscape);
