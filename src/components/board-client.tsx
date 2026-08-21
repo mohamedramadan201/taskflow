@@ -75,10 +75,10 @@ function useFilterMenuPosition(open: boolean) {
   return { triggerRef, menuStyle };
 }
 
-function FilterMenu({ id, label, open, onToggle, triggerContent, summary, menuRole = "group", children }: { id: string; label: string; open: boolean; onToggle: () => void; triggerContent: ReactNode; summary: ReactNode; menuRole?: "group" | "listbox"; children: ReactNode }) {
+function FilterMenu({ id, label, open, onToggle, triggerContent, triggerLabel, summary, menuRole = "group", children }: { id: string; label: string; open: boolean; onToggle: () => void; triggerContent: ReactNode; triggerLabel?: string; summary: ReactNode; menuRole?: "group" | "listbox"; children: ReactNode }) {
   const { triggerRef, menuStyle } = useFilterMenuPosition(open);
 
-  return <div className={`filter-menu ${open ? "open" : ""}`}><button ref={triggerRef} type="button" className="filter-trigger" aria-expanded={open} aria-controls={`${id}-menu`} onClick={onToggle}>{triggerContent}<span className="chevron" aria-hidden="true">⌄</span></button>{open && menuStyle && createPortal(<div className="filter-popover filter-popover-portal" id={`${id}-menu`} role={menuRole} aria-label={`${label} options`} data-filter-popover="true" style={menuStyle}><div className="filter-popover-heading"><strong>{label}</strong>{summary}</div>{children}</div>, document.body)}</div>;
+  return <div className={`filter-menu ${open ? "open" : ""}`}><button ref={triggerRef} type="button" className="filter-trigger" aria-label={triggerLabel} aria-expanded={open} aria-controls={`${id}-menu`} onClick={onToggle}>{triggerContent}<span className="chevron" aria-hidden="true">⌄</span></button>{open && menuStyle && createPortal(<div className="filter-popover filter-popover-portal" id={`${id}-menu`} role={menuRole} aria-label={`${label} options`} data-filter-popover="true" style={menuStyle}><div className="filter-popover-heading"><strong>{label}</strong>{summary}</div>{children}</div>, document.body)}</div>;
 }
 
 function MultiFilter({ id, label, count, open, onToggle, children }: { id: string; label: string; count: number; open: boolean; onToggle: () => void; children: ReactNode }) {
@@ -88,7 +88,7 @@ function MultiFilter({ id, label, count, open, onToggle, children }: { id: strin
 function SingleFilter({ id, label, value, options, open, onToggle, onChange }: { id: string; label: string; value: string; options: { value: string; label: string }[]; open: boolean; onToggle: () => void; onChange: (value: string) => void }) {
   const selectedLabel = options.find((option) => option.value === value)?.label || label;
 
-  return <FilterMenu id={id} label={label} open={open} onToggle={onToggle} menuRole="listbox" triggerContent={<span>{selectedLabel}</span>} summary={<span>Choose one</span>}>{options.map((option) => <button key={option.value} type="button" role="option" aria-selected={option.value === value} className={`filter-option ${option.value === value ? "selected" : ""}`} onClick={() => onChange(option.value)}><span>{option.label}</span>{option.value === value && <strong aria-hidden="true">✓</strong>}</button>)}</FilterMenu>;
+  return <FilterMenu id={id} label={label} open={open} onToggle={onToggle} menuRole="listbox" triggerLabel={`${label}: ${selectedLabel}`} triggerContent={<span>{selectedLabel}</span>} summary={<span>Choose one</span>}>{options.map((option) => <button key={option.value} type="button" role="option" aria-selected={option.value === value} className={`filter-option ${option.value === value ? "selected" : ""}`} onClick={() => onChange(option.value)}><span>{option.label}</span>{option.value === value && <strong aria-hidden="true">✓</strong>}</button>)}</FilterMenu>;
 }
 
 export function BoardClient({ initialTasks, members, role, canManageWorkspace: canManageWorkspaceProp, managerActionCenter, workspaceId, currentUserId, initialLabels, initialSavedViews }: { initialTasks: Task[]; members: Member[]; role: string; canManageWorkspace: boolean; managerActionCenter: ActionCenterData; workspaceId: string; currentUserId: string; initialLabels: Label[]; initialSavedViews: SavedView[] }) {
