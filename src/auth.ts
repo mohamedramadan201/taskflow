@@ -13,7 +13,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     const parsed = credentialsSchema.safeParse(raw);
     if (!parsed.success) return null;
     const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
-    if (!user || !(await compare(parsed.data.password, user.passwordHash))) return null;
+    if (!user || user.accountStatus !== "ACTIVE" || !(await compare(parsed.data.password, user.passwordHash))) return null;
     return { id: user.id, email: user.email, name: user.name };
   } })],
   callbacks: {

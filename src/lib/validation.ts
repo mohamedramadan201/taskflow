@@ -29,7 +29,7 @@ export const taskBulkActionSchema = z.object({
 });
 export const reminderSchema = z.object({ scheduledAt: z.string().datetime(), userId: z.string().min(1).optional() });
 export const commentSchema = z.object({ body: z.string().trim().min(1).max(2000) });
-export const invitationSchema = z.object({ email: z.string().email(), role: roleSchema.default("MEMBER") });
+export const invitationSchema = z.object({ email: z.string().email(), role: roleSchema.default("MEMBER"), teamGroupId: z.string().min(1).nullable().optional() });
 export const invitationRegistrationSchema = z.object({ name: z.string().trim().min(2).max(80), password: z.string().min(8).max(128) });
 export const automationEmailResultSchema = z.object({ kind: z.enum(["INVITATION", "NOTIFICATION"]), id: z.string().min(1), success: z.boolean(), error: z.string().trim().max(500).optional().nullable() });
 export const teamGroupSchema = z.object({ name: z.string().trim().min(2).max(60) });

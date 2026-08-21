@@ -7,7 +7,7 @@ import { prisma } from "@/lib/server/prisma";
 import { taskflowPublicUrl } from "@/lib/public-app-url";
 import { invitationSchema, parseJson } from "@/lib/validation";
 
-const safeInvitation = { id: true, email: true, role: true, expiresAt: true, createdAt: true, emailStatus: true, emailSentAt: true } as const;
+const safeInvitation = { id: true, email: true, role: true, teamGroupId: true, teamGroup: { select: { id: true, name: true } }, expiresAt: true, createdAt: true, emailStatus: true, emailSentAt: true } as const;
 
 export async function GET(_: Request, { params }: { params: Promise<{ workspaceId: string }> }) {
   try {
@@ -29,10 +29,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ wor
     const token = randomBytes(24).toString("hex");
     const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { name: true } });
     if (!workspace) throw new HttpError(404, "Workspace not found");
+    if (input.teamGroupId && !(await prisma.teamGroup.findFirst({ where: { id: input.teamGroupId, workspaceId }, select: { id: true } }))) throw new HttpError(404, "Team group not found");
     const invitation = await prisma.workspaceInvitation.upsert({
       where: { workspaceId_email: { workspaceId, email } },
-      update: { role: input.role, token, invitedByUserId: user.id, expiresAt: new Date(Date.now() + 7 * 86_400_000), acceptedAt: null, acceptedByUserId: null, emailStatus: "PENDING", emailSentAt: null, emailAttempts: 0, emailLastError: null, emailClaimedAt: null },
-      create: { workspaceId, email, role: input.role, token, invitedByUserId: user.id, expiresAt: new Date(Date.now() + 7 * 86_400_000) },
+      update: { role: input.role, teamGroupId: input.teamGroupId ?? null, token, invitedByUserId: user.id, expiresAt: new Date(Date.now() + 7 * 86_400_000), acceptedAt: null, acceptedByUserId: null, emailStatus: "PENDING", emailSentAt: null, emailAttempts: 0, emailLastError: null, emailClaimedAt: null },
+      create: { workspaceId, email, role: input.role, teamGroupId: input.teamGroupId ?? null, token, invitedByUserId: user.id, expiresAt: new Date(Date.now() + 7 * 86_400_000) },
       select: safeInvitation,
     });
     await prisma.activityEvent.create({ data: { workspaceId, actorUserId: user.id, type: "INVITATION_CREATED", detailsJson: { email, role: input.role } } });

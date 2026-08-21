@@ -15,6 +15,11 @@ enum WorkspaceRole {
   VIEWER
 }
 
+enum AccountStatus {
+  PENDING
+  ACTIVE
+}
+
 enum TaskStatus {
   TODO
   IN_PROGRESS
@@ -84,6 +89,7 @@ model User {
   email                     String                @unique
   name                      String?
   passwordHash              String
+  accountStatus             AccountStatus         @default(ACTIVE)
   createdAt                 DateTime              @default(now())
   emailNotifications        Boolean               @default(true)
   taskReminderNotifications Boolean               @default(true)
@@ -158,6 +164,7 @@ model TeamGroup {
   updatedAt   DateTime         @updatedAt
   workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   members     WorkspaceMember[]
+  invitations WorkspaceInvitation[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId, createdAt])
@@ -417,6 +424,7 @@ model WorkspaceInvitation {
   role             WorkspaceRole @default(MEMBER)
   token            String        @unique
   invitedByUserId  String
+  teamGroupId      String?
   acceptedByUserId String?
   expiresAt        DateTime
   acceptedAt       DateTime?
@@ -428,6 +436,7 @@ model WorkspaceInvitation {
   createdAt        DateTime      @default(now())
   workspace        Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   invitedBy        User          @relation("InvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  teamGroup        TeamGroup?    @relation(fields: [teamGroupId], references: [id], onDelete: SetNull)
   acceptedBy       User?         @relation("InvitationInvitee", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, email])
@@ -435,6 +444,7 @@ model WorkspaceInvitation {
   @@index([workspaceId, acceptedAt, createdAt])
   @@index([invitedByUserId])
   @@index([acceptedByUserId])
+  @@index([teamGroupId])
   @@index([emailStatus, expiresAt])
 }
 

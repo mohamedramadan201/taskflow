@@ -9,9 +9,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     const input = await parseJson(request, invitationRegistrationSchema);
     const invitation = await prisma.workspaceInvitation.findUnique({ where: { token }, select: { id: true, email: true, role: true, workspaceId: true, expiresAt: true, acceptedAt: true } });
     if (!invitation || invitation.acceptedAt || invitation.expiresAt < new Date()) throw new HttpError(404, "Invitation is invalid or expired");
-    if (await prisma.user.findUnique({ where: { email: invitation.email }, select: { id: true } })) throw new HttpError(409, "An account already exists for this email. Sign in to accept the invitation.");
     const passwordHash = await hash(input.password, 12);
-    await prisma.user.create({ data: { email: invitation.email, name: input.name, passwordHash } });
+    const existing = await prisma.user.findUnique({ where: { email: invitation.email }, select: { id: true, accountStatus: true } });
+    if (existing && existing.accountStatus !== "PENDING") throw new HttpError(409, "An account already exists for this email. Sign in to accept the invitation.");
+    if (existing) await prisma.user.update({ where: { id: existing.id }, data: { name: input.name, passwordHash, accountStatus: "ACTIVE" } });
+    else await prisma.user.create({ data: { email: invitation.email, name: input.name, passwordHash, accountStatus: "ACTIVE" } });
     return Response.json({ created: true, email: invitation.email }, { status: 201 });
   } catch (error) { return errorResponse(error); }
 }
