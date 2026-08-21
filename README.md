@@ -49,7 +49,7 @@ Email delivery defaults to `log` mode and writes JSON lines to `EMAIL_DELIVERY_L
 The Telegram MVP uses a private bot chat. It does not log in to or impersonate a user's personal Telegram account; the bot receives commands and creates tasks as the linked TaskFlow user.
 
 1. Create a bot with `@BotFather` and set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_BOT_USERNAME` in the deployment environment. Do not include the leading `@` in the username.
-2. Set a random `TELEGRAM_WEBHOOK_SECRET` and deploy TaskFlow at a public HTTPS URL.
+2. Set a random `TELEGRAM_WEBHOOK_SECRET` and deploy TaskFlow at a public HTTPS URL. When an authenticated user clicks **Connect Telegram** in Notifications, TaskFlow registers the webhook automatically.
 3. Register the webhook with Telegram:
 
    ```sh

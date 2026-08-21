@@ -31,6 +31,13 @@ export function telegramLinkUrl(token: string) {
   return username ? `https://t.me/${username}?start=${token}` : null;
 }
 
+export async function registerTelegramWebhook() {
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "")).replace(/\/$/, "");
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!appUrl || !secret || !telegramIsConfigured()) throw new Error("Telegram webhook configuration is incomplete");
+  return telegramApi<boolean>("setWebhook", { url: `${appUrl}/api/integrations/telegram/webhook`, secret_token: secret, allowed_updates: ["message", "callback_query"] });
+}
+
 async function telegramApi<T>(method: string, body: Record<string, unknown>) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) throw new Error("Telegram bot is not configured");

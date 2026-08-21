@@ -1,4 +1,4 @@
-import { createTelegramLinkToken, telegramIsConfigured, telegramLinkUrl } from "@/lib/server/telegram";
+import { createTelegramLinkToken, registerTelegramWebhook, telegramIsConfigured, telegramLinkUrl } from "@/lib/server/telegram";
 import { requireUser, errorResponse } from "@/lib/server/authorization";
 import { prisma } from "@/lib/server/prisma";
 
@@ -14,6 +14,7 @@ export async function POST() {
   try {
     const user = await requireUser();
     if (!telegramIsConfigured()) return Response.json({ error: "Telegram integration is not configured yet." }, { status: 503 });
+    await registerTelegramWebhook();
     const token = createTelegramLinkToken();
     await prisma.telegramLinkToken.deleteMany({ where: { userId: user.id, usedAt: null } });
     await prisma.telegramLinkToken.create({ data: { userId: user.id, tokenHash: token.hash, expiresAt: token.expiresAt } });
