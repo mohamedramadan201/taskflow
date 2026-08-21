@@ -29,7 +29,7 @@ function processTaskFlowQueue() {
     var result = taskflowRequest_("automation/claim", "get"), work = result.work || [], properties = PropertiesService.getScriptProperties();
     work.forEach(function(item) {
       var markerKey = "TASKFLOW_SENT_" + item.kind + "_" + item.id, marker = properties.getProperty(markerKey), markerAt = Number(marker || 0);
-      if (markerAt && Date.now() - markerAt < 7 * 86_400_000) {
+      if (markerAt && Date.now() - markerAt < 7 * 86400000) {
         taskflowRequest_("automation/result", "post", { kind: item.kind, id: item.id, success: true });
         return;
       }
