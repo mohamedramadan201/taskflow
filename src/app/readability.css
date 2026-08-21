@@ -898,3 +898,85 @@ body .bulk-actions-side-panel .bulk-date-action input { min-height:30px; padding
 @media (max-width:819px) {
   body .bulk-actions-side-panel { width:100%; max-height:92dvh; }
 }
+
+/* Task status palette and task-detail reference polish. */
+body .status-column-todo,
+body .status-column-in-progress,
+body .status-column-done { padding:10px; border:1px solid transparent; border-radius:14px; }
+body .status-column-todo { border-color:#eee7f4; background:#fbf9fc; }
+body .status-column-in-progress { border-color:#f1e8c8; background:#fcfaf3; }
+body .status-column-done { border-color:#dcecdf; background:#f4faf5; }
+body .status-column-todo .column-title,
+body .status-column-in-progress .column-title,
+body .status-column-done .column-title { min-height:28px; margin:0 0 10px; padding:0 2px; }
+body .status-column-todo .column-title h2,
+body .status-column-in-progress .column-title h2,
+body .status-column-done .column-title h2 { display:inline-flex; align-items:center; gap:6px; margin:0; padding:4px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+body .status-column-todo .column-title h2 { background:#eee6f5; color:#5d4b72; }
+body .status-column-in-progress .column-title h2 { background:#f5e7b4; color:#775a1c; }
+body .status-column-done .column-title h2 { background:#dceede; color:#39714a; }
+body .status-column-todo .column-title h2::before,
+body .status-column-in-progress .column-title h2::before,
+body .status-column-done .column-title h2::before { content:""; width:8px; height:8px; border-radius:50%; }
+body .status-column-todo .column-title h2::before { background:#926cb5; }
+body .status-column-in-progress .column-title h2::before { background:#d6a02e; }
+body .status-column-done .column-title h2::before { background:#66a878; }
+body .status-column-todo .column-title > span { background:#eee6f5; color:#6c5a80; }
+body .status-column-in-progress .column-title > span { background:#f5e7b4; color:#85651e; }
+body .status-column-done .column-title > span { background:#dceede; color:#39714a; }
+
+body .status-select,
+body .priority-select { font-weight:700; }
+body .status-select.status-todo,
+body .status-select[data-status="TODO"] { border-color:#9d82bb; background:#e8f0fa; color:#3f5870; }
+body .status-select.status-in-progress,
+body .status-select[data-status="IN_PROGRESS"] { border-color:#dbb45d; background:#fff0ca; color:#74561b; }
+body .status-select.status-done,
+body .status-select[data-status="DONE"] { border-color:#79b48a; background:#e5f4e8; color:#2f6e43; }
+body .status-select.status-no-action-needed,
+body .status-select[data-status="NO_ACTION_NEEDED"] { border-color:#e1a06c; background:#fff0e3; color:#96511f; }
+body .priority-select.priority-low { border-color:#cbd2ce; background:#f0f3f1; color:#58635f; }
+body .priority-select.priority-medium { border-color:#e0b962; background:#fff0ca; color:#74561b; }
+body .priority-select.priority-high,
+body .priority-select.priority-urgent { border-color:#e2a083; background:#fee8dd; color:#9e3c17; }
+body .card-actions .status-select,
+body .task-list-view .status-select { min-height:34px; border-radius:8px; }
+
+body .task-drawer { background:#fffefd; border-radius:18px; }
+body .task-detail-header { min-height:68px; padding:14px 20px; background:#fffefd; }
+body .task-detail-title-input { font-size:17px; }
+body .task-detail-header-actions .priority { min-width:74px; margin:0; padding:8px 14px; border:1px solid #dfc980; border-radius:999px; background:#f8edc7; color:#76591a; text-align:center; font-size:11px; }
+body .task-detail-header-actions .priority.low { border-color:#ccd5d0; background:#eef2ef; color:#56655e; }
+body .task-detail-header-actions .priority.high,
+body .task-detail-header-actions .priority.urgent { border-color:#e6ae92; background:#fee7dc; color:#9d3e1b; }
+body .task-detail-main { padding:20px 22px 24px; }
+body .task-detail-side { padding:15px 18px 18px; background:#fffefd; }
+body .task-detail-top-fields { gap:11px; }
+body .task-detail-top-fields label,
+body .task-detail-secondary-fields label { color:#6c7771; font-size:10px; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }
+body .task-detail-top-fields input,
+body .task-detail-top-fields select,
+body .task-detail-secondary-fields input,
+body .task-detail-secondary-fields select { min-height:38px; color:var(--ink); font-size:12px; text-transform:none; letter-spacing:0; }
+body .task-detail-top-fields .status-select,
+body .task-detail-top-fields .priority-select { min-height:38px; }
+body .task-detail-main .detail-form > label { color:#6c7771; font-size:11px; font-weight:700; }
+body .task-detail-main .detail-form textarea[name="description"] { min-height:56px; background:#fff; line-height:1.45; }
+body .task-detail-main .work-planning-section { border:1px solid #9ad5ae; border-left:4px solid #2c8a5a; background:#eaf8ee; }
+body .task-detail-main .work-planning-section h3 { font-size:13px; }
+body .task-detail-main .work-planning-section .detail-form,
+body .task-detail-main .work-planning-section .planning-grid { gap:9px; }
+body .task-detail-main .blocker-section { border:1px solid #efa67e; border-left:4px solid #d56c3f; background:#fff0e9; }
+body .task-detail-main .blocker-section h3 { font-size:13px; }
+body .task-detail-main .blocker-section > summary { color:#6d3d2b; }
+body .task-detail-save { min-height:38px; padding:9px 17px; border-radius:8px; background:#5967c8; }
+body .task-detail-save:hover { background:#4c5ab7; }
+body .task-detail-side .activity-section { min-height:250px; }
+@media (max-width:700px) {
+  body .status-column-todo,
+  body .status-column-in-progress,
+  body .status-column-done { padding:8px; }
+  body .task-detail-header { min-height:60px; }
+  body .task-detail-main { padding:16px 14px 20px; }
+  body .task-detail-side { padding:14px; }
+}
