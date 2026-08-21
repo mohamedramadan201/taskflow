@@ -185,5 +185,12 @@ export function reportToCsv(report: ReturnType<typeof buildWorkspaceReport>) {
     ["Output by team member", "Tasks reporting", "Updated products", "New products", "Updated images", "New images", "Total output"], ...report.outputByMember.map((item) => [item.user.name || item.user.email, item.reportingTasks, item.updatedProducts, item.newProducts, item.updatedImages, item.newImages, item.totalOutput]), [],
     ["Team member", "Capacity hours", "Remaining hours", "Utilization", "Open", "Blocked", "Overdue"], ...report.workload.map((item) => [item.user.name || item.user.email, minutesToHours(item.capacityMinutes), minutesToHours(item.remainingMinutes), `${item.utilization}%`, item.open, item.blocked, item.overdue]),
   ];
-  return rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
+  const csvCell = (value: string | number) => {
+    const text = String(value);
+    // Prevent spreadsheet applications from treating user-controlled names or
+    // emails that start with a formula character as executable formulas.
+    const safeText = typeof value === "string" && /^[=+\-@]/.test(text) ? `'${text}` : text;
+    return `"${safeText.replaceAll('"', '""')}"`;
+  };
+  return rows.map((row) => row.map(csvCell).join(",")).join("\n");
 }

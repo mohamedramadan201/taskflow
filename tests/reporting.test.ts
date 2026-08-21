@@ -46,6 +46,11 @@ test("workspace report exports output and workload as CSV", () => {
   assert.match(reportToCsv(report), /"Product & image activity","Count"/); assert.match(reportToCsv(report), /"Total products","0"/); assert.match(reportToCsv(report), /"Output by team member","Tasks reporting"/); assert.match(reportToCsv(report), /"Team member","Capacity hours"/); assert.match(reportToCsv(report), /"Owner","30","0","0%"/);
 });
 
+test("workspace report CSV neutralizes spreadsheet formula values", () => {
+  const report = buildWorkspaceReport([], [{ user: { id: "u1", name: "=HYPERLINK(\"https://attacker.test\")", email: "owner@example.com" } }]);
+  assert.match(reportToCsv(report), /"'=HYPERLINK\(""https:\/\/attacker\.test""\)"/);
+});
+
 test("workload compares remaining effort with capacity and exposes risk", () => {
   const now = new Date("2026-08-10T09:00:00Z");
   const tasks = [{ id: "t1", title: "Launch", status: "IN_PROGRESS", priority: "URGENT", dueAt: "2026-08-11T12:00:00Z", updatedAt: "2026-08-01T00:00:00Z", assigneeUserId: "u1", estimatedMinutes: 2400, remainingMinutes: 2100, blockedAt: "2026-08-09T00:00:00Z", blockedReason: "Waiting for data" }];
