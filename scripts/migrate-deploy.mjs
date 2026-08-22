@@ -82,6 +82,41 @@ try {
       resolveAsApplied(followUpMigration);
     }
   }
+
+  const teamGroupsMigration = "20260820100000_team_groups";
+  const teamGroupsState = await client.query(`
+    SELECT to_regclass('public."TeamGroup"') IS NOT NULL AS "tableExists"
+  `);
+
+  if (teamGroupsState.rows[0].tableExists) {
+    await client.query('ALTER TABLE "WorkspaceMember" ADD COLUMN IF NOT EXISTS "teamGroupId" TEXT');
+    await client.query('CREATE UNIQUE INDEX IF NOT EXISTS "TeamGroup_workspaceId_name_key" ON "TeamGroup"("workspaceId", "name")');
+    await client.query('CREATE INDEX IF NOT EXISTS "TeamGroup_workspaceId_createdAt_idx" ON "TeamGroup"("workspaceId", "createdAt")');
+    await client.query('CREATE INDEX IF NOT EXISTS "WorkspaceMember_teamGroupId_idx" ON "WorkspaceMember"("teamGroupId")');
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'TeamGroup_workspaceId_fkey'
+        ) THEN
+          ALTER TABLE "TeamGroup"
+            ADD CONSTRAINT "TeamGroup_workspaceId_fkey"
+            FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'WorkspaceMember_teamGroupId_fkey'
+        ) THEN
+          ALTER TABLE "WorkspaceMember"
+            ADD CONSTRAINT "WorkspaceMember_teamGroupId_fkey"
+            FOREIGN KEY ("teamGroupId") REFERENCES "TeamGroup"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+        END IF;
+      END $$;
+    `);
+    await client.query('ALTER TABLE "TeamGroup" ENABLE ROW LEVEL SECURITY');
+    if (!(await isMigrationApplied(teamGroupsMigration))) {
+      resolveAsApplied(teamGroupsMigration);
+    }
+  }
 } finally {
   await client.end();
 }
