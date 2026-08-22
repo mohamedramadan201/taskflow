@@ -189,6 +189,80 @@ try {
       resolveAsApplied(inactiveAccountsMigration);
     }
   }
+
+  const telegramMigration = "20260821190000_telegram_bot_integration";
+  const telegramState = await client.query(`
+    SELECT EXISTS (
+      SELECT 1
+      FROM pg_class class_rel
+      JOIN pg_namespace namespace_rel ON namespace_rel.oid = class_rel.relnamespace
+      WHERE namespace_rel.nspname = 'public'
+        AND class_rel.relname IN ('TelegramConnection', 'TelegramLinkToken', 'TelegramUpdate')
+        AND class_rel.relkind = 'r'
+    ) AS "tableExists"
+  `);
+
+  if (telegramState.rows[0].tableExists) {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "TelegramConnection" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "telegramUserId" TEXT NOT NULL,
+        "chatId" TEXT NOT NULL,
+        "username" TEXT,
+        "firstName" TEXT,
+        "defaultWorkspaceId" TEXT,
+        "enabled" BOOLEAN NOT NULL DEFAULT true,
+        "linkedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "lastSeenAt" TIMESTAMP(3),
+        CONSTRAINT "TelegramConnection_pkey" PRIMARY KEY ("id")
+      );
+      CREATE TABLE IF NOT EXISTS "TelegramLinkToken" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "tokenHash" TEXT NOT NULL,
+        "expiresAt" TIMESTAMP(3) NOT NULL,
+        "usedAt" TIMESTAMP(3),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "TelegramLinkToken_pkey" PRIMARY KEY ("id")
+      );
+      CREATE TABLE IF NOT EXISTS "TelegramUpdate" (
+        "id" TEXT NOT NULL,
+        "updateId" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "TelegramUpdate_pkey" PRIMARY KEY ("id")
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS "TelegramConnection_userId_key" ON "TelegramConnection"("userId");
+      CREATE UNIQUE INDEX IF NOT EXISTS "TelegramConnection_telegramUserId_key" ON "TelegramConnection"("telegramUserId");
+      CREATE INDEX IF NOT EXISTS "TelegramConnection_chatId_idx" ON "TelegramConnection"("chatId");
+      CREATE INDEX IF NOT EXISTS "TelegramConnection_enabled_lastSeenAt_idx" ON "TelegramConnection"("enabled", "lastSeenAt");
+      CREATE UNIQUE INDEX IF NOT EXISTS "TelegramLinkToken_tokenHash_key" ON "TelegramLinkToken"("tokenHash");
+      CREATE INDEX IF NOT EXISTS "TelegramLinkToken_userId_expiresAt_idx" ON "TelegramLinkToken"("userId", "expiresAt");
+      CREATE UNIQUE INDEX IF NOT EXISTS "TelegramUpdate_updateId_key" ON "TelegramUpdate"("updateId");
+      CREATE INDEX IF NOT EXISTS "TelegramUpdate_createdAt_idx" ON "TelegramUpdate"("createdAt");
+    `);
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'TelegramConnection_userId_fkey') THEN
+          ALTER TABLE "TelegramConnection"
+            ADD CONSTRAINT "TelegramConnection_userId_fkey"
+            FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'TelegramLinkToken_userId_fkey') THEN
+          ALTER TABLE "TelegramLinkToken"
+            ADD CONSTRAINT "TelegramLinkToken_userId_fkey"
+            FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+      END $$;
+    `);
+    await client.query('ALTER TABLE "TelegramConnection" ENABLE ROW LEVEL SECURITY');
+    await client.query('ALTER TABLE "TelegramLinkToken" ENABLE ROW LEVEL SECURITY');
+    await client.query('ALTER TABLE "TelegramUpdate" ENABLE ROW LEVEL SECURITY');
+    if (!(await isMigrationApplied(telegramMigration))) {
+      resolveAsApplied(telegramMigration);
+    }
+  }
 } finally {
   await client.end();
 }
