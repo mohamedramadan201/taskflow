@@ -21,6 +21,24 @@ const client = new pg.Client({ connectionString: migrationUrl });
 await client.connect();
 
 try {
+  const isMigrationApplied = async (migrationName) => {
+    const result = await client.query(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM "_prisma_migrations"
+        WHERE "migration_name" = $1
+          AND "finished_at" IS NOT NULL
+          AND "rolled_back_at" IS NULL
+      ) AS "migrationAlreadyApplied"
+    `, [migrationName]);
+    return result.rows[0].migrationAlreadyApplied;
+  };
+
+  const resolveAsApplied = (migrationName) => {
+    console.log(`Repairing already-present schema state for ${migrationName}...`);
+    execFileSync("pnpm", ["exec", "prisma", "migrate", "resolve", "--applied", migrationName], { stdio: "inherit" });
+  };
+
   const result = await client.query(`
     SELECT
       EXISTS (
@@ -30,19 +48,39 @@ try {
         WHERE type.typname = 'InboundEmailStatus'
           AND value.enumlabel = 'NO_ACTION_NEEDED'
       ) AS "enumValueExists",
-      EXISTS (
-        SELECT 1
-        FROM "_prisma_migrations"
-        WHERE "migration_name" = $1
-          AND "finished_at" IS NOT NULL
-          AND "rolled_back_at" IS NULL
-      ) AS "migrationAlreadyApplied"
-  `, [historicalMigration]);
+  `);
 
   const state = result.rows[0];
-  if (state.enumValueExists && !state.migrationAlreadyApplied) {
-    console.log(`Repairing already-present schema state for ${historicalMigration}...`);
-    execFileSync("pnpm", ["exec", "prisma", "migrate", "resolve", "--applied", historicalMigration], { stdio: "inherit" });
+  if (state.enumValueExists && !(await isMigrationApplied(historicalMigration))) {
+    resolveAsApplied(historicalMigration);
+  }
+
+  const followUpMigration = "20260819190000_task_follow_up_with";
+  const followUpState = await client.query(`
+    SELECT
+      EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'Task'
+          AND column_name = 'followUpWith'
+      ) AS "columnExists",
+      EXISTS (
+        SELECT 1
+        FROM pg_class class_rel
+        JOIN pg_namespace namespace_rel ON namespace_rel.oid = class_rel.relnamespace
+        WHERE namespace_rel.nspname = 'public'
+          AND class_rel.relname = 'Task_workspaceId_followUpWith_idx'
+      ) AS "indexExists"
+  `);
+
+  if (followUpState.rows[0].columnExists) {
+    if (!followUpState.rows[0].indexExists) {
+      await client.query('CREATE INDEX IF NOT EXISTS "Task_workspaceId_followUpWith_idx" ON "Task"("workspaceId", "followUpWith")');
+    }
+    if (!(await isMigrationApplied(followUpMigration))) {
+      resolveAsApplied(followUpMigration);
+    }
   }
 } finally {
   await client.end();
