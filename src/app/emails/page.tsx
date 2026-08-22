@@ -7,14 +7,15 @@ import { assertPermission, listUserWorkspaces, requireWorkspaceBySlug } from "@/
 import { prisma } from "@/lib/server/prisma";
 
 export default async function EmailsPage({ searchParams }: { searchParams: Promise<{ workspace?: string }> }) {
-  const session = await auth(); if (!session?.user?.id || !session.user.email) redirect("/login"); const slug = (await searchParams).workspace || "taskflow-demo";
+  const session = await auth(); if (!session?.user?.id || !session.user.email) redirect("/login"); const userWorkspaces = await listUserWorkspaces(session.user.id); const slug = (await searchParams).workspace || userWorkspaces[0]?.slug; if (!slug) redirect("/login?error=no-workspace");
   const access = await requireWorkspaceBySlug(slug, { id: session.user.id, email: session.user.email }); assertPermission(access.subject, "EMAIL_VIEW");
   const canManage = access.role === "OWNER"; const canTriage = hasPermission(access.subject, "EMAIL_TRIAGE");
-  const [emails, connectors, members, tasks, workspaces] = await Promise.all([
+  const [emails, connectors, members, tasks] = await Promise.all([
     prisma.inboundEmail.findMany({ where: { workspaceId: access.workspace.id }, include: { connector: { select: { id: true, mailboxAddress: true, displayName: true } }, task: { select: { id: true, title: true } }, handledBy: { select: { name: true, email: true } } }, orderBy: { receivedAt: "desc" }, take: 250 }),
     canManage ? prisma.emailConnector.findMany({ where: { workspaceId: access.workspace.id }, omit: { tokenHash: true }, include: { filters: { orderBy: { createdAt: "asc" } }, _count: { select: { emails: true } } }, orderBy: { createdAt: "asc" } }) : Promise.resolve([]),
     prisma.workspaceMember.findMany({ where: { workspaceId: access.workspace.id, suspendedAt: null }, select: { role: true, user: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: "asc" } }),
-    prisma.task.findMany({ where: { workspaceId: access.workspace.id }, select: { id: true, title: true, status: true }, orderBy: { updatedAt: "desc" }, take: 200 }), listUserWorkspaces(session.user.id),
+    prisma.task.findMany({ where: { workspaceId: access.workspace.id }, select: { id: true, title: true, status: true }, orderBy: { updatedAt: "desc" }, take: 200 }),
   ]);
+  const workspaces = userWorkspaces;
   return <AppShell active="emails" userName={session.user.name} workspaces={workspaces} workspaceSlug={slug}><EmailInboxClient initialEmails={emails} initialConnectors={connectors} members={members} tasks={tasks} workspaceId={access.workspace.id} workspaceSlug={slug} canManage={canManage} canTriage={canTriage} currentUserId={session.user.id} /></AppShell>;
 }

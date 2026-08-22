@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "TaskFlow — Clear work, faster teams",
     short_name: "TaskFlow",
     description: "Manage team workload, tasks, and inbox signals in one focused workspace.",
-    start_url: "/board?workspace=taskflow-demo",
+    start_url: "/",
     scope: "/",
     display: "standalone",
     orientation: "portrait-primary",

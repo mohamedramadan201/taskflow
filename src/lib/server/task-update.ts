@@ -28,9 +28,9 @@ export async function updateTaskWithinTransaction(tx: TransactionClient, task: P
     const [member, workspace, assigned] = await Promise.all([
       tx.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: updated.workspaceId, userId: updated.assigneeUserId } }, select: { weeklyCapacityMinutes: true, user: { select: { name: true, email: true } } } }),
       tx.workspace.findUnique({ where: { id: updated.workspaceId }, select: { overloadThreshold: true } }),
-      tx.task.findMany({ where: { workspaceId: updated.workspaceId, assigneeUserId: updated.assigneeUserId, status: { notIn: ["DONE", "NO_ACTION_NEEDED"] } }, select: { estimatedMinutes: true, remainingMinutes: true } }),
+      tx.$queryRaw<Array<{ remaining: number | null }>>`SELECT COALESCE(SUM(COALESCE("remainingMinutes", "estimatedMinutes", 0)), 0)::int AS "remaining" FROM "Task" WHERE "workspaceId" = ${updated.workspaceId} AND "assigneeUserId" = ${updated.assigneeUserId} AND "status" NOT IN ('DONE', 'NO_ACTION_NEEDED')`,
     ]);
-    const remaining = assigned.reduce((sum, assignedTask) => sum + (assignedTask.remainingMinutes ?? assignedTask.estimatedMinutes ?? 0), 0);
+    const remaining = Number(assigned[0]?.remaining ?? 0);
     if (member && workspace && remaining > member.weeklyCapacityMinutes * workspace.overloadThreshold / 100) alertMessages.push(`${member.user.name || member.user.email} is over capacity after updating: ${updated.title}`);
   }
   if (alertMessages.length) {

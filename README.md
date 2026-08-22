@@ -24,19 +24,12 @@ TaskFlow is a multi-workspace task-management application built with Next.js 16,
 4. Replace the password placeholder in both URLs with your database password.
 5. Generate the Prisma client with `pnpm db:generate`.
 6. Apply migrations with `pnpm db:migrate` when working against a development database. The hosted project used by this workspace is managed through reviewed Supabase migrations.
-7. Seed the demo data with `pnpm db:seed` when needed.
+7. Apply only the reviewed Prisma migrations. This repository intentionally contains no seed users or demo data.
 8. Start TaskFlow with `pnpm dev`, then open `http://localhost:3000`.
 
 Do not commit `.env` or expose database passwords, Auth secrets, SMTP credentials, or service-role keys.
 
-## Demo accounts
-
-Seeded accounts use the password `Taskflow123!`:
-
-- `owner@taskflow.local`
-- `admin@taskflow.local`
-- `member@taskflow.local`
-- `viewer@taskflow.local`
+There are no built-in production accounts. Create the first workspace owner through the approved invitation or account-provisioning flow.
 
 ## Reminders and email
 

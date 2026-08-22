@@ -9,8 +9,8 @@ import type { Role } from "@/lib/permissions";
 
 type WorkspaceOption = { id: string; name: string; slug: string; role?: Role };
 
-export function AppShell({ children, active, userName, workspaces, workspaceSlug = "taskflow-demo" }: { children: React.ReactNode; active: "board" | "emails" | "team" | "reports" | "notifications"; userName?: string | null; workspaces: WorkspaceOption[]; workspaceSlug?: string }) {
-  const currentSlug = workspaces.some((workspace) => workspace.slug === workspaceSlug) ? workspaceSlug : workspaces[0]?.slug || workspaceSlug;
+export function AppShell({ children, active, userName, workspaces, workspaceSlug }: { children: React.ReactNode; active: "board" | "emails" | "team" | "reports" | "notifications"; userName?: string | null; workspaces: WorkspaceOption[]; workspaceSlug?: string }) {
+  const currentSlug = (workspaces.some((workspace) => workspace.slug === workspaceSlug) ? workspaceSlug : workspaces[0]?.slug) || "";
   const isOwner = workspaces.find((workspace) => workspace.slug === currentSlug)?.role === "OWNER";
   const links: [string, string, string, NavigationIconName][] = [["board", `/board?workspace=${currentSlug}`, "Tasks", "tasks"], ["emails", `/emails?workspace=${currentSlug}`, "Email Inbox", "email"], ["notifications", "/notifications", "Notifications", "notifications"]];
   if (isOwner) links.splice(2, 0, ["team", `/team?workspace=${currentSlug}`, "Team", "team"], ["reports", `/reports?workspace=${currentSlug}`, "Reports", "reports"]);

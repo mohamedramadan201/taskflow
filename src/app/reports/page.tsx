@@ -16,7 +16,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const session = await auth();
   if (!session?.user?.id || !session.user.email) redirect("/login");
   const query = await searchParams;
-  const slug = query.workspace || "taskflow-demo";
+  const workspaces = await listUserWorkspaces(session.user.id);
+  const slug = query.workspace || workspaces[0]?.slug;
+  if (!slug) redirect("/login?error=no-workspace");
   const range = query.range === "all" || query.range === "90" ? query.range : "30";
   const completedFrom = query.completedFrom || "";
   const completedTo = query.completedTo || "";
@@ -27,7 +29,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const since = reportRangeStart(range);
   const outputDateFilter = "error" in customCompletionRange ? null : { not: null, ...(hasCustomCompletionRange ? { ...(customCompletionRange.start ? { gte: customCompletionRange.start } : {}), ...(customCompletionRange.end ? { lt: customCompletionRange.end } : {}) } : since ? { gte: since } : {}) };
   const reportTaskSelect = { id: true, title: true, status: true, priority: true, createdAt: true, updatedAt: true, startedAt: true, completedAt: true, dueAt: true, assigneeUserId: true, estimatedMinutes: true, remainingMinutes: true, actualMinutes: true, blockedAt: true, blockedReason: true, blockerTaskId: true, updatedProductsCount: true, newProductsCount: true, updatedImagesCount: true, newImagesCount: true } as const;
-  const [tasks, outputTasks, summaryTasks, members, workspaces] = await Promise.all([prisma.task.findMany({ where: { workspaceId: workspace.id, ...(since ? { createdAt: { gte: since } } : {}) }, select: reportTaskSelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: REPORT_TASK_LIMIT + 1 }), outputDateFilter ? prisma.task.findMany({ where: { workspaceId: workspace.id, completedAt: outputDateFilter }, select: reportTaskSelect, orderBy: [{ completedAt: "desc" }, { id: "desc" }], take: REPORT_TASK_LIMIT + 1 }) : Promise.resolve([]), prisma.task.findMany({ where: { workspaceId: workspace.id }, select: reportTaskSelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: REPORT_TASK_LIMIT + 1 }), prisma.workspaceMember.findMany({ where: { workspaceId: workspace.id }, select: { id: true, weeklyCapacityMinutes: true, availability: { where: { date: { gte: new Date(new Date().setUTCDate(new Date().getUTCDate() - 7)) } }, select: { date: true, availableMinutes: true } }, user: { select: { id: true, name: true, email: true } } } }), listUserWorkspaces(session.user.id)]);
+  const [tasks, outputTasks, summaryTasks, members] = await Promise.all([prisma.task.findMany({ where: { workspaceId: workspace.id, ...(since ? { createdAt: { gte: since } } : {}) }, select: reportTaskSelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: REPORT_TASK_LIMIT + 1 }), outputDateFilter ? prisma.task.findMany({ where: { workspaceId: workspace.id, completedAt: outputDateFilter }, select: reportTaskSelect, orderBy: [{ completedAt: "desc" }, { id: "desc" }], take: REPORT_TASK_LIMIT + 1 }) : Promise.resolve([]), prisma.task.findMany({ where: { workspaceId: workspace.id }, select: reportTaskSelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: REPORT_TASK_LIMIT + 1 }), prisma.workspaceMember.findMany({ where: { workspaceId: workspace.id }, select: { id: true, weeklyCapacityMinutes: true, availability: { where: { date: { gte: new Date(new Date().setUTCDate(new Date().getUTCDate() - 7)) } }, select: { date: true, availableMinutes: true } }, user: { select: { id: true, name: true, email: true } } } })]);
   const reportLimited = tasks.length > REPORT_TASK_LIMIT || outputTasks.length > REPORT_TASK_LIMIT || summaryTasks.length > REPORT_TASK_LIMIT;
   const reportTasks = tasks.slice(0, REPORT_TASK_LIMIT);
   const reportOutputTasks = outputTasks.slice(0, REPORT_TASK_LIMIT);
