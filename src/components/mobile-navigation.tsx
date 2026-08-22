@@ -40,7 +40,7 @@ export function MobileNavigation({ links, active, workspaceSlug, workspaces }: {
     <header className="mobile-app-header">
       <button ref={triggerRef} type="button" className="mobile-menu-trigger" aria-label="Open navigation" aria-expanded={open} aria-controls="mobile-navigation-drawer" onClick={() => setOpen((value) => !value)}><NavigationIcon name={open ? "close" : "menu"} size={26} /></button>
       <Link href={"/board?workspace=" + workspaceSlug} className="mobile-brand"><span>✓</span><strong>TaskFlow</strong></Link>
-      <div className="mobile-header-notifications"><NavigationIcon name="notifications" size={25} /><NotificationBadge /></div>
+      <Link href="/notifications" className="mobile-header-notifications" aria-label="Open notifications"><NavigationIcon name="notifications" size={25} /><NotificationBadge /></Link>
     </header>
     {open && <div className="mobile-navigation-backdrop" role="presentation" onClick={() => setOpen(false)}>
       <aside ref={menuRef} id="mobile-navigation-drawer" className="mobile-navigation-drawer" role="dialog" aria-modal="true" aria-label="TaskFlow navigation" onClick={(event) => event.stopPropagation()}>
