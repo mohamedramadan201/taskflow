@@ -47,7 +47,7 @@ try {
         JOIN pg_enum value ON value.enumtypid = type.oid
         WHERE type.typname = 'InboundEmailStatus'
           AND value.enumlabel = 'NO_ACTION_NEEDED'
-      ) AS "enumValueExists",
+      ) AS "enumValueExists"
   `);
 
   const state = result.rows[0];
