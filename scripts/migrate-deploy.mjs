@@ -117,6 +117,27 @@ try {
       resolveAsApplied(teamGroupsMigration);
     }
   }
+
+  const appsScriptMigration = "20260821150000_apps_script_delivery";
+  const invitationTableState = await client.query(`
+    SELECT to_regclass('public."WorkspaceInvitation"') IS NOT NULL AS "tableExists"
+  `);
+
+  if (invitationTableState.rows[0].tableExists) {
+    await client.query(`
+      ALTER TABLE "WorkspaceInvitation"
+        ADD COLUMN IF NOT EXISTS "emailSentAt" TIMESTAMP(3),
+        ADD COLUMN IF NOT EXISTS "emailStatus" "DeliveryStatus" NOT NULL DEFAULT 'PENDING',
+        ADD COLUMN IF NOT EXISTS "emailAttempts" INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS "emailLastError" TEXT,
+        ADD COLUMN IF NOT EXISTS "emailClaimedAt" TIMESTAMP(3)
+    `);
+    await client.query('ALTER TABLE "Notification" ADD COLUMN IF NOT EXISTS "emailClaimedAt" TIMESTAMP(3)');
+    await client.query('CREATE INDEX IF NOT EXISTS "WorkspaceInvitation_emailStatus_expiresAt_idx" ON "WorkspaceInvitation"("emailStatus", "expiresAt")');
+    if (!(await isMigrationApplied(appsScriptMigration))) {
+      resolveAsApplied(appsScriptMigration);
+    }
+  }
 } finally {
   await client.end();
 }
