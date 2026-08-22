@@ -28,6 +28,45 @@ export const taskBulkActionSchema = z.object({
   if (value[required[value.action]] === undefined) context.addIssue({ code: "custom", path: [required[value.action]], message: "This value is required for the selected action" });
 });
 export const reminderSchema = z.object({ scheduledAt: z.string().datetime(), userId: z.string().min(1).optional() });
+const workspaceReminderEmailSchema = z.string().trim().toLowerCase().email().max(254);
+const workspaceReminderShape = z.object({
+  title: z.string().trim().min(1).max(120),
+  details: z.string().trim().max(4000).optional().nullable(),
+  assignedEmails: z.array(workspaceReminderEmailSchema).min(1).max(50),
+  reminderAt: z.string().datetime(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+  repeatType: z.enum(["NONE", "DAILY", "WEEKLY", "MONTHLY"]).default("NONE"),
+  repeatInterval: z.number().int().min(1).max(365).default(1),
+  repeatEndDate: z.string().datetime().optional().nullable(),
+  notes: z.string().trim().max(4000).optional().nullable(),
+  calendarPopupMinutes: z.number().int().min(0).max(1440).default(10),
+});
+const validateWorkspaceReminderDates = (value: { reminderAt?: string; repeatEndDate?: string | null }, context: z.RefinementCtx) => {
+  if (value.repeatEndDate && value.reminderAt && new Date(value.repeatEndDate).getTime() < new Date(value.reminderAt).getTime()) {
+    context.addIssue({ code: "custom", path: ["repeatEndDate"], message: "Repeat end date cannot be before the reminder date" });
+  }
+};
+export const workspaceReminderInputSchema = workspaceReminderShape.superRefine(validateWorkspaceReminderDates);
+export const workspaceReminderPatchSchema = workspaceReminderShape.partial().superRefine((value, context) => {
+  if (Object.keys(value).length === 0) context.addIssue({ code: "custom", message: "At least one field is required" });
+  if (value.reminderAt || value.repeatEndDate) validateWorkspaceReminderDates(value, context);
+});
+export const workspaceReminderActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("DONE") }),
+  z.object({ action: z.literal("CANCELLED") }),
+  z.object({ action: z.literal("SNOOZE"), reminderAt: z.string().datetime() }),
+]);
+export const workspaceReminderBulkSchema = z.object({ reminders: z.array(workspaceReminderShape.superRefine(validateWorkspaceReminderDates)).min(1).max(100) });
+export const workspaceReminderSettingsSchema = z.object({
+  defaultAssignedEmails: z.array(workspaceReminderEmailSchema).max(50).default([]),
+  assigneeDirectoryEmails: z.array(workspaceReminderEmailSchema).max(100).default([]),
+  defaultCalendarPopupMinutes: z.number().int().min(0).max(1440).default(10),
+  defaultEmailIntro: z.string().trim().max(2000).default("Hello,\n\nThis is a reminder for the following task:"),
+  defaultEmailSignature: z.string().trim().max(2000).default("Regards,\nTaskFlow"),
+  sendCopyToCreator: z.boolean().default(false),
+  archiveAfterDays: z.number().int().min(1).max(3650).default(90),
+});
 export const commentSchema = z.object({ body: z.string().trim().min(1).max(2000) });
 export const invitationSchema = z.object({ email: z.string().email(), role: roleSchema.default("MEMBER"), teamGroupId: z.string().min(1).nullable().optional() });
 export const invitationRegistrationSchema = z.object({ name: z.string().trim().min(2).max(80), password: z.string().min(8).max(128) });

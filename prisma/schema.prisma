@@ -62,6 +62,22 @@ enum ReminderStatus {
   CANCELLED
 }
 
+enum WorkspaceReminderStatus {
+  PENDING
+  PROCESSING
+  SENT
+  DONE
+  CANCELLED
+  ERROR
+}
+
+enum WorkspaceReminderPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 enum InboundEmailStatus {
   UNTRIAGED
   CONVERTED
@@ -100,6 +116,7 @@ model User {
   comments                  Comment[]
   notifications             Notification[]
   reminders                 Reminder[]
+  createdWorkspaceReminders WorkspaceReminder[] @relation("WorkspaceReminderCreator")
   invitationsSent           WorkspaceInvitation[] @relation("InvitationInviter")
   invitationsReceived       WorkspaceInvitation[] @relation("InvitationInvitee")
   savedTaskViews            SavedTaskView[]
@@ -120,6 +137,9 @@ model Workspace {
   comments           Comment[]
   notifications      Notification[]
   reminders          Reminder[]
+  workspaceReminders WorkspaceReminder[]
+  reminderSettings   WorkspaceReminderSettings?
+  reminderLogs       WorkspaceReminderLog[]
   invitations        WorkspaceInvitation[]
   customRoles        WorkspaceRoleDefinition[]
   teamGroups         TeamGroup[]
@@ -500,6 +520,74 @@ model Reminder {
   @@index([taskId])
   @@index([userId])
   @@index([status, scheduledAt])
+}
+
+model WorkspaceReminder {
+  id                    String                   @id @default(cuid())
+  workspaceId           String
+  title                 String
+  details               String?
+  assignedEmails        String[]                 @default([])
+  reminderAt            DateTime
+  status                WorkspaceReminderStatus  @default(PENDING)
+  createdByUserId       String
+  createdAt             DateTime                 @default(now())
+  sentAt                DateTime?
+  cancelledAt           DateTime?
+  doneAt                DateTime?
+  lastUpdatedAt         DateTime                 @updatedAt
+  notes                 String?
+  errorMessage          String?
+  repeatType            RecurrenceType           @default(NONE)
+  repeatInterval        Int                      @default(1)
+  repeatEndDate         DateTime?
+  occurrenceCount       Int                      @default(0)
+  lastSentAt            DateTime?
+  priority              WorkspaceReminderPriority @default(MEDIUM)
+  tags                  String[]                 @default([])
+  calendarPopupMinutes  Int                      @default(10)
+  snoozedAt             DateTime?
+  snoozeCount           Int                      @default(0)
+  archivedAt            DateTime?
+  workspace             Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy             User                     @relation("WorkspaceReminderCreator", fields: [createdByUserId], references: [id])
+  logs                  WorkspaceReminderLog[]
+
+  @@index([workspaceId, status, reminderAt])
+  @@index([workspaceId, createdAt])
+  @@index([createdByUserId])
+}
+
+model WorkspaceReminderLog {
+  id             String             @id @default(cuid())
+  workspaceId    String
+  reminderId     String?
+  taskTitle      String
+  assignedEmails String               @default("")
+  action         String
+  result         String
+  message        String
+  createdAt      DateTime           @default(now())
+  workspace      Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reminder       WorkspaceReminder? @relation(fields: [reminderId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([reminderId, createdAt])
+}
+
+model WorkspaceReminderSettings {
+  id                         String    @id @default(cuid())
+  workspaceId                String    @unique
+  defaultAssignedEmails     String[]  @default([])
+  assigneeDirectoryEmails   String[]  @default([])
+  defaultCalendarPopupMinutes Int      @default(10)
+  defaultEmailIntro         String    @default("Hello,\n\nThis is a reminder for the following task:")
+  defaultEmailSignature     String    @default("Regards,\nTaskFlow")
+  sendCopyToCreator         Boolean   @default(false)
+  archiveAfterDays          Int       @default(90)
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+  workspace                 Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 model TelegramConnection {

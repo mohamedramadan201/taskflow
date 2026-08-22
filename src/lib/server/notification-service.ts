@@ -3,6 +3,7 @@ import { getEmailDeliveryConfig } from "../email-delivery";
 import { prepareDueReminderEmailQueue, prepareReminderForAppsScript } from "./email-automation";
 import { prisma } from "./prisma";
 import { sendNotificationEmail } from "./email-provider";
+import { processWorkspaceReminders } from "./workspace-reminders";
 
 export async function deliverAssignmentNotification(notificationId: string) {
   const notification = await prisma.notification.findUnique({ where: { id: notificationId }, include: { user: true, task: true, workspace: true } });
@@ -67,9 +68,10 @@ export async function processDueReminders(limit = 25) {
   if (getEmailDeliveryConfig().mode === "apps_script") {
     const workspaces = await prisma.workspace.findMany({ select: { id: true } });
     const queued = (await Promise.all(workspaces.map((workspace) => prepareDueReminderEmailQueue(workspace.id, limit)))).reduce((total, count) => total + count, 0);
-    return { processed: queued, sent: 0, failed: 0, queued };
+    return { processed: queued, sent: 0, failed: 0, queued, workspaceReminders: { processed: 0, sent: 0, failed: 0, queued: 0 } };
   }
   const due = await prisma.reminder.findMany({ where: { status: { in: ["PENDING", "FAILED"] }, scheduledAt: { lte: new Date() }, attempts: { lt: 3 } }, orderBy: { scheduledAt: "asc" }, take: limit });
   const results = await Promise.allSettled(due.map((item) => deliverReminder(item.id)));
-  return { processed: due.length, sent: results.filter((r) => r.status === "fulfilled").length, failed: results.filter((r) => r.status === "rejected").length };
+  const workspaceReminders = await processWorkspaceReminders(limit);
+  return { processed: due.length, sent: results.filter((r) => r.status === "fulfilled").length, failed: results.filter((r) => r.status === "rejected").length, workspaceReminders };
 }

@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "pnpm db:migrate:deploy && prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "test": "node --test --test-isolation=none tests/*.test.ts",
     "db:generate": "prisma generate",
+    "db:migrate:deploy": "node scripts/migrate-deploy.mjs",
     "db:migrate": "prisma migrate dev",
     "verify:email-schema": "node scripts/verify-email-schema.mjs"
   },

@@ -13,6 +13,7 @@ TaskFlow is a multi-workspace task-management application built with Next.js 16,
 - Workspace reports covering completion, overdue work, priority, workload, and CSV export.
 - A metadata-only Gmail inbox with sender/receiver rules, configurable schedules, health monitoring, and atomic email-to-task conversion.
 - Telegram bot integration for linking a user account and creating tasks from `/task` or `/note`.
+- A native workspace Reminder section with recurring reminders, multi-recipient delivery, snooze, history, logs, bulk CSV creation, digests, and archive controls.
 
 ## Local setup with Supabase
 
@@ -30,6 +31,20 @@ TaskFlow is a multi-workspace task-management application built with Next.js 16,
 Do not commit `.env` or expose database passwords, Auth secrets, SMTP credentials, or service-role keys.
 
 There are no built-in production accounts. Create the first workspace owner through the approved invitation or account-provisioning flow.
+
+## Workspace reminders
+
+The **Reminder** section is native to TaskFlow and stores reminder records in PostgreSQL without creating duplicate board tasks. It supports pending/history views, today/upcoming/overdue/recurring/assignee filters, priorities, tags, multiple email recipients, recurring schedules, snooze, done/cancel actions, activity logs, bulk CSV creation, manual digests, and archive controls.
+
+Scheduled delivery is processed by `POST /api/reminders/process` with `Authorization: Bearer <CRON_SECRET>`. Use TaskFlow's existing SMTP or log delivery settings for native workspace reminders. The reminder page provides a Google Calendar confirmation link rather than requesting Calendar OAuth access; this keeps the integration safe for mobile and avoids storing Google credentials in TaskFlow.
+
+The workspace reminder migration must be applied to the production database before the feature is used:
+
+```sh
+pnpm exec prisma migrate deploy
+```
+
+Use the production `DIRECT_URL` for the migration connection and keep `DATABASE_URL` configured for the application runtime.
 
 ## Reminders and email
 
