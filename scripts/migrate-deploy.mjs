@@ -138,6 +138,57 @@ try {
       resolveAsApplied(appsScriptMigration);
     }
   }
+
+  const inactiveAccountsMigration = "20260821170000_inactive_account_activation";
+  const accountStatusState = await client.query(`
+    SELECT
+      EXISTS (
+        SELECT 1 FROM pg_type WHERE typname = 'AccountStatus'
+      ) AS "enumExists",
+      EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'User'
+          AND column_name = 'accountStatus'
+      ) AS "userColumnExists",
+      EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'WorkspaceInvitation'
+          AND column_name = 'teamGroupId'
+      ) AS "invitationColumnExists"
+  `);
+
+  if (accountStatusState.rows[0].enumExists || accountStatusState.rows[0].userColumnExists || accountStatusState.rows[0].invitationColumnExists) {
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'AccountStatus') THEN
+          CREATE TYPE "AccountStatus" AS ENUM ('PENDING', 'ACTIVE');
+        END IF;
+      END $$;
+    `);
+    await client.query('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "accountStatus" "AccountStatus" NOT NULL DEFAULT \'ACTIVE\'');
+    await client.query('ALTER TABLE "WorkspaceInvitation" ADD COLUMN IF NOT EXISTS "teamGroupId" TEXT');
+    await client.query('CREATE INDEX IF NOT EXISTS "WorkspaceInvitation_teamGroupId_idx" ON "WorkspaceInvitation"("teamGroupId")');
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'WorkspaceInvitation_teamGroupId_fkey'
+        ) THEN
+          ALTER TABLE "WorkspaceInvitation"
+            ADD CONSTRAINT "WorkspaceInvitation_teamGroupId_fkey"
+            FOREIGN KEY ("teamGroupId") REFERENCES "TeamGroup"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+        END IF;
+      END $$;
+    `);
+    if (!(await isMigrationApplied(inactiveAccountsMigration))) {
+      resolveAsApplied(inactiveAccountsMigration);
+    }
+  }
 } finally {
   await client.end();
 }
