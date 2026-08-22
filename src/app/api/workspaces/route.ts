@@ -6,6 +6,7 @@ export async function GET() { try { const user = await requireUser(); return Res
 export async function POST(request: Request) { try {
   const user = await requireUser(); const input = await parseJson(request, z.object({ name: z.string().trim().min(2).max(80), slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(60) }));
   if (await prisma.workspace.findUnique({ where: { slug: input.slug }, select: { id: true } })) return Response.json({ error: "Workspace URL is already in use" }, { status: 409 });
-  const workspace = await prisma.workspace.create({ data: { ...input, members: { create: { userId: user.id, role: "OWNER" } } } });
+  const lastMembership = await prisma.workspaceMember.aggregate({ where: { userId: user.id, suspendedAt: null }, _max: { sidebarOrder: true } });
+  const workspace = await prisma.workspace.create({ data: { ...input, members: { create: { userId: user.id, role: "OWNER", sidebarOrder: (lastMembership._max.sidebarOrder ?? -1) + 1 } } } });
   return Response.json(workspace, { status: 201 });
 } catch (e) { return e instanceof Response ? e : errorResponse(e); } }

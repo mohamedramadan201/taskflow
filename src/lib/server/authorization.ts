@@ -37,10 +37,12 @@ export async function requireWorkspaceOwner(workspaceId: string) {
 export async function listUserWorkspaces(userId: string) {
   const workspaces = await prisma.workspace.findMany({
     where: { members: { some: { userId, suspendedAt: null } } },
-    select: { id: true, name: true, slug: true, members: { where: { userId, suspendedAt: null }, select: { role: true }, take: 1 } },
-    orderBy: { name: "asc" },
+    select: { id: true, name: true, slug: true, members: { where: { userId, suspendedAt: null }, select: { role: true, sidebarOrder: true }, take: 1 } },
+    orderBy: [{ name: "asc" }],
   });
-  return workspaces.map(({ members, ...workspace }) => ({ ...workspace, role: (members[0]?.role || "VIEWER") as Role }));
+  return workspaces
+    .map(({ members, ...workspace }) => ({ ...workspace, role: (members[0]?.role || "VIEWER") as Role, sidebarOrder: members[0]?.sidebarOrder || 0 }))
+    .sort((a, b) => a.sidebarOrder - b.sidebarOrder || a.name.localeCompare(b.name));
 }
 export async function requireWorkspaceBySlug(slug: string, authenticatedUser?: { id: string; email: string }) {
   const user = authenticatedUser ?? await requireUser();

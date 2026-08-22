@@ -7,7 +7,7 @@ import { MobileNavigation } from "@/components/mobile-navigation";
 import { NavigationIcon, type NavigationIconName } from "@/components/navigation-icon";
 import type { Role } from "@/lib/permissions";
 
-type WorkspaceOption = { id: string; name: string; slug: string; role?: Role };
+type WorkspaceOption = { id: string; name: string; slug: string; role?: Role; sidebarOrder?: number };
 
 export function AppShell({ children, active, userName, workspaces, workspaceSlug }: { children: React.ReactNode; active: "board" | "emails" | "team" | "reports" | "notifications"; userName?: string | null; workspaces: WorkspaceOption[]; workspaceSlug?: string }) {
   const currentSlug = (workspaces.some((workspace) => workspace.slug === workspaceSlug) ? workspaceSlug : workspaces[0]?.slug) || "";

@@ -8,7 +8,7 @@ import { NotificationBadge } from "@/components/notification-badge";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 
 type MobileLink = { key: string; href: string; label: string; icon: NavigationIconName };
-type WorkspaceOption = { id: string; name: string; slug: string };
+type WorkspaceOption = { id: string; name: string; slug: string; role?: string; sidebarOrder?: number };
 
 export function MobileNavigation({ links, active, workspaceSlug, workspaces }: { links: readonly MobileLink[]; active: string; workspaceSlug: string; workspaces: WorkspaceOption[] }) {
   const [open, setOpen] = useState(false);

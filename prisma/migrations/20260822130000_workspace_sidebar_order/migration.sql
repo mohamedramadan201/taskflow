@@ -1,0 +1,1 @@
+ALTER TABLE "WorkspaceMember" ADD COLUMN "sidebarOrder" INTEGER NOT NULL DEFAULT 0;

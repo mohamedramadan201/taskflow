@@ -139,6 +139,7 @@ model WorkspaceMember {
   userId                String
   role                  WorkspaceRole
   createdAt             DateTime                 @default(now())
+  sidebarOrder          Int                      @default(0)
   suspendedAt           DateTime?
   suspendedByUserId     String?
   customRoleId          String?
