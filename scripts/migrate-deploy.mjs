@@ -263,6 +263,50 @@ try {
       resolveAsApplied(telegramMigration);
     }
   }
+
+  const hardeningMigration = "20260821220000_harden_rls_tokens_rate_limits_telegram";
+  const hardeningState = await client.query(`
+    SELECT
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'WorkspaceInvitation' AND column_name = 'tokenHash'
+      ) AS "tokenHashExists",
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'WorkspaceInvitation' AND column_name = 'token'
+      ) AS "legacyTokenExists",
+      EXISTS (
+        SELECT 1 FROM pg_class class_rel
+        JOIN pg_namespace namespace_rel ON namespace_rel.oid = class_rel.relnamespace
+        WHERE namespace_rel.nspname = 'public' AND class_rel.relname = 'WorkspaceInvitation_tokenHash_key'
+      ) AS "tokenHashIndexExists",
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'Task' AND column_name = 'telegramUpdateId'
+      ) AS "telegramTaskColumnExists",
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'TelegramUpdate' AND column_name = 'status'
+      ) AS "telegramStatusExists",
+      to_regclass('public."RateLimitBucket"') IS NOT NULL AS "rateLimitTableExists",
+      EXISTS (
+        SELECT 1 FROM pg_class class_rel
+        JOIN pg_namespace namespace_rel ON namespace_rel.oid = class_rel.relnamespace
+        WHERE namespace_rel.nspname = 'public' AND class_rel.relname = 'RateLimitBucket_expiresAt_idx'
+      ) AS "rateLimitIndexExists"
+  `);
+  const hardening = hardeningState.rows[0];
+  const hardeningSchemaIsComplete = hardening.tokenHashExists
+    && !hardening.legacyTokenExists
+    && hardening.tokenHashIndexExists
+    && hardening.telegramTaskColumnExists
+    && hardening.telegramStatusExists
+    && hardening.rateLimitTableExists
+    && hardening.rateLimitIndexExists;
+
+  if (hardeningSchemaIsComplete && !(await isMigrationApplied(hardeningMigration))) {
+    resolveAsApplied(hardeningMigration);
+  }
 } finally {
   await client.end();
 }
