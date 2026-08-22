@@ -351,7 +351,7 @@ body{font-family:var(--font-ui)}
   .mobile-header-notifications{position:relative;justify-self:end}
   .mobile-header-notifications .notification-badge{position:absolute;top:-2px;right:-1px;min-width:24px;height:24px;padding:0 6px;display:grid;place-items:center;border:2px solid var(--sidebar-bg)}
   .mobile-navigation-backdrop{position:fixed;z-index:60;inset:0;display:block;background:#081e1988}
-  .mobile-navigation-drawer{width:min(330px,86vw);height:100%;overflow:auto;padding:24px 16px 30px;background:var(--sidebar-bg);box-shadow:12px 0 36px #10251f45}
+  .mobile-navigation-drawer{display:flex;flex-direction:column;width:min(330px,86vw);height:100%;overflow:auto;padding:24px 16px max(30px,env(safe-area-inset-bottom));background:var(--sidebar-bg);box-shadow:12px 0 36px #10251f45}
   .mobile-drawer-brand{display:flex;align-items:center;gap:12px;margin:0 8px 30px;color:#fff}
   .mobile-drawer-brand>span{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;font-size:20px}
   .mobile-drawer-brand strong{font-size:20px;font-weight:800}
@@ -363,6 +363,14 @@ body{font-family:var(--font-ui)}
   .mobile-navigation-drawer nav a:hover,.mobile-navigation-drawer nav a.active{background:#fff;color:#123f35}
   .mobile-navigation-drawer nav a .navigation-icon{width:21px;height:21px}
   .mobile-navigation-drawer nav a span:nth-child(2){flex:1}
+  .mobile-account{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:10px;margin:28px 8px 0;padding:18px 0 0;border-top:1px solid var(--sidebar-line)}
+  .mobile-account-avatar{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--lime);color:#173c33;font-size:15px;font-weight:800}
+  .mobile-account-copy{min-width:0}
+  .mobile-account-copy span,.mobile-account-copy strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mobile-account-copy span{margin-bottom:4px;color:var(--sidebar-muted);font-size:10px}
+  .mobile-account-copy strong{color:var(--sidebar-text);font-size:13px;font-weight:700}
+  .mobile-sign-out{border:1px solid var(--sidebar-line);border-radius:7px;background:transparent;color:var(--sidebar-muted);padding:7px 8px;font-size:11px;font-weight:700;cursor:pointer}
+  .mobile-sign-out:hover{border-color:#7fae9f;color:#fff;background:#1c4b40}
   .main-content{width:100%;max-width:none;min-width:0;padding:26px 22px 64px;overflow:visible}
   .mobile-bottom-nav{display:none!important}
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { logout } from "@/app/actions";
 import { EmailInboxBadge } from "@/components/email-inbox-badge";
 import { NavigationIcon, type NavigationIconName } from "@/components/navigation-icon";
 import { NotificationBadge } from "@/components/notification-badge";
@@ -10,7 +11,7 @@ import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 type MobileLink = { key: string; href: string; label: string; icon: NavigationIconName };
 type WorkspaceOption = { id: string; name: string; slug: string; role?: string; sidebarOrder?: number };
 
-export function MobileNavigation({ links, active, workspaceSlug, workspaces }: { links: readonly MobileLink[]; active: string; workspaceSlug: string; workspaces: WorkspaceOption[] }) {
+export function MobileNavigation({ links, active, workspaceSlug, workspaces, userName }: { links: readonly MobileLink[]; active: string; workspaceSlug: string; workspaces: WorkspaceOption[]; userName?: string | null }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -47,6 +48,11 @@ export function MobileNavigation({ links, active, workspaceSlug, workspaces }: {
         <div className="mobile-drawer-brand"><span>✓</span><strong>TaskFlow</strong><button type="button" onClick={() => setOpen(false)} aria-label="Close navigation"><NavigationIcon name="close" size={22} /></button></div>
         {workspaces.length > 0 && <WorkspaceSwitcher workspaces={workspaces} currentSlug={workspaceSlug} />}
         <nav aria-label="Mobile navigation">{links.map((link) => <Link key={link.key} className={active === link.key ? "active" : ""} aria-current={active === link.key ? "page" : undefined} href={link.href} onClick={() => setOpen(false)}><NavigationIcon name={link.icon} /><span>{link.label}</span>{link.key === "emails" && <EmailInboxBadge workspaceSlug={workspaceSlug} />}{link.key === "notifications" && <NotificationBadge />}</Link>)}</nav>
+        <div className="mobile-account" aria-label="Signed-in account">
+          <span className="mobile-account-avatar">{userName?.trim()?.[0]?.toUpperCase() || "U"}</span>
+          <div className="mobile-account-copy"><span>Signed in as</span><strong>{userName || "TaskFlow user"}</strong></div>
+          <form action={logout}><button type="submit" className="mobile-sign-out">Sign out</button></form>
+        </div>
       </aside>
     </div>}
   </>;
