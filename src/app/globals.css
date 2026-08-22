@@ -374,3 +374,15 @@ body{font-family:var(--font-ui)}
   .mobile-brand strong{font-size:19px}
   .main-content{padding:24px 16px 54px}
 }
+
+/* Mobile spaces use wrapping pills so every workspace remains visible without clipping. */
+@media (max-width:900px){
+  .mobile-navigation-drawer .workspace-switcher .space-list{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:10px 12px;overflow:visible;padding:0 8px}
+  .mobile-navigation-drawer .workspace-switcher .space-list>div{flex:0 0 auto;width:auto}
+  .mobile-navigation-drawer .workspace-switcher .space-item{width:auto;min-width:0;min-height:46px;padding:7px 13px;border-radius:999px;background:#1d5448;gap:10px;font-size:16px;white-space:nowrap}
+  .mobile-navigation-drawer .workspace-switcher .space-item:hover{background:#286254}
+  .mobile-navigation-drawer .workspace-switcher .space-item.active{background:#fff;color:#123f35}
+  .mobile-navigation-drawer .workspace-switcher .space-icon{width:30px;height:30px;flex-basis:30px;font-size:15px}
+  .mobile-navigation-drawer .workspace-switcher .space-add{display:inline-flex!important;width:auto;margin:11px 8px 0;padding:7px 14px!important;border:1px dashed #5a877a!important;border-radius:999px;background:transparent!important;gap:10px;font-size:16px!important;white-space:nowrap}
+  .mobile-navigation-drawer .workspace-switcher .space-add>span{width:auto;height:auto;border:0;font-size:20px;line-height:1}
+}
