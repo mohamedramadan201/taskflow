@@ -17,5 +17,5 @@ export function PwaInstallPrompt() {
   if (!event || dismissed) return null;
   async function install() { await event?.prompt(); const choice = await event?.userChoice; if (choice?.outcome === "accepted") setEvent(null); }
   function dismiss() { window.localStorage.setItem("taskflow-pwa-install-dismissed", "1"); setDismissed(true); }
-  return <aside className="pwa-install-prompt" role="status"><div><strong>Install TaskFlow</strong><span>Open your workspace faster from your home screen.</span></div><button className="primary-button small" onClick={() => void install}>Install</button><button className="pwa-install-dismiss" onClick={dismiss} aria-label="Dismiss install prompt">×</button></aside>;
+  return <aside className="pwa-install-prompt" role="status"><div><strong>Install TaskFlow</strong><span>Open your workspace faster from your home screen.</span></div><button className="primary-button small" onClick={() => void install()}>Install</button><button className="pwa-install-dismiss" onClick={dismiss} aria-label="Dismiss install prompt">×</button></aside>;
 }
