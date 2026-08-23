@@ -110,7 +110,8 @@ function gmailChangesSince_(historyId) {
 
 function gmailMetadata_(id, includeSent) {
   try {
-    var message = Gmail.Users.Messages.get("me", id, { format: "metadata", metadataHeaders: ["From", "To", "Cc", "Delivered-To", "X-Original-To", "Subject", "Message-ID"] });
+    var message = gmailMessageGet_(id, { format: "metadata", metadataHeaders: ["From", "To", "Cc", "Delivered-To", "X-Original-To", "Subject", "Message-ID"] });
+    if (!message) return null;
     var labels = message.labelIds || [];
     if (["SPAM", "TRASH", "DRAFT"].some(function(label) { return labels.indexOf(label) >= 0; })) return null;
     var isSent = labels.indexOf("SENT") >= 0;
@@ -126,7 +127,8 @@ function gmailMetadata_(id, includeSent) {
 
 function gmailThreadMetadata_(threadId) {
   try {
-    var thread = Gmail.Users.Threads.get("me", threadId, { format: "metadata", metadataHeaders: ["From", "To", "Cc", "Subject"] });
+    var thread = gmailThreadGet_(threadId, { format: "metadata", metadataHeaders: ["From", "To", "Cc", "Subject"] });
+    if (!thread) return null;
     var messages = (thread.messages || []).map(function(message) {
       var headers = {}; ((message.payload && message.payload.headers) || []).forEach(function(header) { var key = header.name.toLowerCase(); (headers[key] || (headers[key] = [])).push(header.value); });
       var from = parseAddresses_((headers.from || []).join(","))[0];
@@ -138,6 +140,46 @@ function gmailThreadMetadata_(threadId) {
     if (/404|requested entity was not found|not found/i.test(String(error))) return null;
     throw error;
   }
+}
+
+function gmailMessageGet_(id, options) {
+  var lastError, attempts = 3;
+  for (var attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return Gmail.Users.Messages.get("me", id, options);
+    } catch (error) {
+      lastError = error;
+      var message = String(error && error.message || error);
+      if (!/precondition|backend|temporarily unavailable|internal|timeout/i.test(message) || attempt === attempts - 1) break;
+      Utilities.sleep(250 * (attempt + 1));
+    }
+  }
+  var errorText = String(lastError && lastError.message || lastError);
+  if (/404|requested entity was not found|not found|precondition/i.test(errorText)) {
+    console.warn("Skipping unavailable Gmail message " + id + ": " + errorText.slice(0, 180));
+    return null;
+  }
+  throw lastError;
+}
+
+function gmailThreadGet_(id, options) {
+  var lastError, attempts = 3;
+  for (var attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return Gmail.Users.Threads.get("me", id, options);
+    } catch (error) {
+      lastError = error;
+      var message = String(error && error.message || error);
+      if (!/precondition|backend|temporarily unavailable|internal|timeout/i.test(message) || attempt === attempts - 1) break;
+      Utilities.sleep(250 * (attempt + 1));
+    }
+  }
+  var errorText = String(lastError && lastError.message || lastError);
+  if (/404|requested entity was not found|not found|precondition/i.test(errorText)) {
+    console.warn("Skipping unavailable Gmail thread " + id + ": " + errorText.slice(0, 180));
+    return null;
+  }
+  throw lastError;
 }
 
 function uniqueValues_(values) { var seen = {}, result = []; (values || []).forEach(function(value) { value = String(value || ""); if (value && !seen[value]) { seen[value] = true; result.push(value); } }); return result; }

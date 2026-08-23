@@ -11,3 +11,12 @@ test("Apps Script manual sync requests the configured lookback window", () => {
   assert.doesNotMatch(code, /q: "newer_than:/);
   assert.match(code, /new Date\(item\.receivedAt\)\.getTime\(\) >= cutoff/);
 });
+
+test("Apps Script isolates unavailable Gmail messages from the full mailbox sync", () => {
+  assert.match(code, /function gmailMessageGet_\(id, options\)/);
+  assert.match(code, /function gmailThreadGet_\(id, options\)/);
+  assert.match(code, /gmailMessageGet_\(id, \{/);
+  assert.match(code, /gmailThreadGet_\(threadId, \{/);
+  assert.match(code, /precondition/i);
+  assert.match(code, /Skipping unavailable Gmail message/);
+});
