@@ -139,7 +139,9 @@ export const emailIngestSchema = z.object({
 });
 export const emailActionSchema = z.object({ status: z.enum(["UNTRIAGED", "DISMISSED", "NO_ACTION_NEEDED"]) });
 export const emailBulkActionSchema = z.object({
-  emailIds: z.array(z.string().min(1)).min(1).max(100),
+  // The inbox can render up to 250 emails at once, so "Select visible"
+  // must be able to submit the full visible set in one secure request.
+  emailIds: z.array(z.string().min(1)).min(1).max(500),
   action: z.enum(["DISMISS", "NO_ACTION_NEEDED", "RESTORE", "ASSIGN"]),
   assigneeUserId: z.string().min(1).optional().nullable(),
 });
