@@ -63,11 +63,11 @@ function syncTaskFlow() {
     var threadIds = uniqueValues_(changedMetadata.map(function(item) { return item.gmailThreadId; }));
     var threadSnapshots = threadIds.map(gmailThreadMetadata_).filter(Boolean);
     if (!messages.length && !threadSnapshots.length) { taskflowRequest_("ingest", "post", { historyId: changes.historyId, emails: [], threadSnapshots: [] }); return; }
-    for (var offset = 0; offset < messages.length; offset += 50) {
-      var isLast = offset + 50 >= messages.length;
-      taskflowRequest_("ingest", "post", { historyId: isLast ? changes.historyId : undefined, emails: messages.slice(offset, offset + 50), threadSnapshots: isLast ? threadSnapshots : [] });
+    var emailChunks = chunkValues_(messages, 50), snapshotChunks = chunkValues_(threadSnapshots, 50), batchCount = Math.max(emailChunks.length, snapshotChunks.length);
+    for (var batchIndex = 0; batchIndex < batchCount; batchIndex++) {
+      var isLast = batchIndex + 1 === batchCount;
+      taskflowRequest_("ingest", "post", { historyId: isLast ? changes.historyId : undefined, emails: emailChunks[batchIndex] || [], threadSnapshots: snapshotChunks[batchIndex] || [] });
     }
-    if (!messages.length) taskflowRequest_("ingest", "post", { historyId: changes.historyId, emails: [], threadSnapshots: threadSnapshots });
   } catch (error) {
     try { taskflowRequest_("ingest", "post", { historyId: config && config.historyId, emails: [], error: String(error && error.message || error).slice(0, 500) }); } catch (_) {}
     throw error;
@@ -183,6 +183,7 @@ function gmailThreadGet_(id, options) {
 }
 
 function uniqueValues_(values) { var seen = {}, result = []; (values || []).forEach(function(value) { value = String(value || ""); if (value && !seen[value]) { seen[value] = true; result.push(value); } }); return result; }
+function chunkValues_(values, size) { var chunks = []; for (var offset = 0; offset < values.length; offset += size) chunks.push(values.slice(offset, offset + size)); return chunks; }
 
 function addressValues_(values) { return parseAddresses_((values || []).join(",")).map(function(item) { return item.address; }); }
 function parseAddresses_(value) { var found = [], regex = /(?:"?([^"<,]+)"?\s*)?<([^<>\s]+@[^<>\s]+)>|([^\s,<>]+@[^\s,<>]+)/g, match; while ((match = regex.exec(value || ""))) found.push({ name: String(match[1] || "").trim(), address: String(match[2] || match[3]).toLowerCase() }); return found; }
