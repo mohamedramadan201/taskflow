@@ -50,13 +50,13 @@ function syncTaskFlow() {
   try {
     config = taskflowRequest_("sync-config", "get");
     if (!config.enabled || !config.shouldSync) return;
-    if (!config.historyId) {
-      var profile = Gmail.Users.getProfile("me");
-      taskflowRequest_("ingest", "post", { historyId: String(profile.historyId), emails: [] });
-      return;
-    }
-    var changes = gmailChangesSince_(config.historyId);
-    var changedMetadata = changes.messageIds.map(function(id) { return gmailMetadata_(id, true); }).filter(Boolean);
+    var changes = config.historyId ? gmailChangesSince_(config.historyId) : { messageIds: [], historyId: String(Gmail.Users.getProfile("me").historyId) };
+    var messageIds = changes.messageIds || [];
+    // A manual sync (and the first sync for a new connector) also backfills
+    // the configured window. Incremental history sync remains the fast path
+    // on the scheduled runs that follow.
+    if (config.syncRequestedAt || !config.historyId) messageIds = uniqueValues_(messageIds.concat(gmailMessagesFromLookback_(config.monitor && config.monitor.lookbackDays)));
+    var changedMetadata = messageIds.map(function(id) { return gmailMetadata_(id, true); }).filter(Boolean);
     var messages = changedMetadata.filter(function(item) { return !item.isSent && passesRules_(item, config.mailboxAddress, config.filters); }).map(function(item) { var copy = {}; Object.keys(item).forEach(function(key) { if (key !== "isSent") copy[key] = item[key]; }); return copy; });
     var threadIds = uniqueValues_(changedMetadata.map(function(item) { return item.gmailThreadId; }));
     var threadSnapshots = threadIds.map(gmailThreadMetadata_).filter(Boolean);
@@ -70,6 +70,16 @@ function syncTaskFlow() {
     try { taskflowRequest_("ingest", "post", { historyId: config && config.historyId, emails: [], error: String(error && error.message || error).slice(0, 500) }); } catch (_) {}
     throw error;
   }
+}
+
+function gmailMessagesFromLookback_(lookbackDays) {
+  var days = Math.max(1, Math.min(90, Number(lookbackDays) || 30)), ids = {}, pageToken;
+  do {
+    var response = Gmail.Users.Messages.list("me", { q: "newer_than:" + days + "d", maxResults: 500, pageToken: pageToken });
+    (response.messages || []).forEach(function(message) { if (message && message.id) ids[message.id] = true; });
+    pageToken = response.nextPageToken;
+  } while (pageToken);
+  return Object.keys(ids);
 }
 
 function gmailChangesSince_(historyId) {

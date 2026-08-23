@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const code = readFileSync(new URL("../integrations/google-apps-script/Code.gs", import.meta.url), "utf8");
+
+test("Apps Script manual sync requests the configured lookback window", () => {
+  assert.match(code, /syncRequestedAt \|\| !config\.historyId/);
+  assert.match(code, /gmailMessagesFromLookback_\(config\.monitor && config\.monitor\.lookbackDays\)/);
+  assert.match(code, /q: "newer_than:" \+ days \+ "d"/);
+});
