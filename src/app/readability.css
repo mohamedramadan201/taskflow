@@ -27,6 +27,24 @@ body .demo-hint {
   font-size: 12px;
 }
 
+/* Keep navigation focused: show the active space first and reveal the full
+   list only when the user opens the picker or enters Manage mode. */
+body .workspace-switcher .space-current-trigger { display:flex; align-items:center; gap:12px; width:100%; min-height:48px; padding:6px 10px; border:0; border-radius:11px; background:#fff; color:#123f35; font:600 16px var(--font-ui)!important; text-align:left; cursor:pointer; }
+body .space-current-trigger:hover { background:#f1f5f2; }
+body .space-current-trigger:focus-visible { outline:3px solid #82ad9f; outline-offset:2px; }
+body .space-current-trigger .space-icon { color:#fff; }
+body .space-picker-chevron { margin-left:auto; color:#5a877a; font-size:18px; line-height:1; }
+body .space-list.compact-open { margin-top:6px; padding:6px; border:1px solid #2d5d50; border-radius:12px; background:#0f362e; max-height:240px; overflow:auto; }
+body .space-list.compact-open .space-item { min-height:38px; padding:5px 8px; border-radius:8px; font-size:13px; }
+body .space-list.compact-open .space-icon { width:28px; height:28px; flex-basis:28px; font-size:13px; }
+body .space-list.compact-open .space-row .space-item.active { background:#fff; color:#123f35; }
+@media (max-width:800px) {
+  body .mobile-navigation-drawer .space-current-trigger { margin:0 8px; min-height:52px; padding:8px 12px; border-radius:12px; font-size:16px; }
+  body .mobile-navigation-drawer .space-list.compact-open { display:grid; gap:4px; margin:7px 8px 0; padding:6px; max-height:220px; overflow:auto; }
+  body .mobile-navigation-drawer .space-list.compact-open .space-row { width:100%; }
+  body .mobile-navigation-drawer .space-list.compact-open .space-item { width:100%; min-height:44px; border-radius:9px; font-size:15px; }
+}
+
 body .task-card p,
 body .task-meta,
 body .task-list-view td,

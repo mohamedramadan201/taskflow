@@ -55,8 +55,10 @@ function syncTaskFlow() {
     // A manual sync (and the first sync for a new connector) also backfills
     // the configured window. Incremental history sync remains the fast path
     // on the scheduled runs that follow.
-    if (config.syncRequestedAt || !config.historyId) messageIds = uniqueValues_(messageIds.concat(gmailMessagesFromLookback_(config.monitor && config.monitor.lookbackDays)));
-    var changedMetadata = messageIds.map(function(id) { return gmailMetadata_(id, true); }).filter(Boolean);
+    var backfillMetadata = config.syncRequestedAt || !config.historyId ? gmailMessagesFromLookback_(config.monitor && config.monitor.lookbackDays) : [];
+    var changedMetadata = backfillMetadata.concat(messageIds.map(function(id) { return gmailMetadata_(id, true); }).filter(Boolean));
+    var seenMetadata = {};
+    changedMetadata = changedMetadata.filter(function(item) { if (seenMetadata[item.gmailMessageId]) return false; seenMetadata[item.gmailMessageId] = true; return true; });
     var messages = changedMetadata.filter(function(item) { return !item.isSent && passesRules_(item, config.mailboxAddress, config.filters); }).map(function(item) { var copy = {}; Object.keys(item).forEach(function(key) { if (key !== "isSent") copy[key] = item[key]; }); return copy; });
     var threadIds = uniqueValues_(changedMetadata.map(function(item) { return item.gmailThreadId; }));
     var threadSnapshots = threadIds.map(gmailThreadMetadata_).filter(Boolean);
@@ -73,13 +75,20 @@ function syncTaskFlow() {
 }
 
 function gmailMessagesFromLookback_(lookbackDays) {
-  var days = Math.max(1, Math.min(90, Number(lookbackDays) || 30)), ids = {}, pageToken;
+  var days = Math.max(1, Math.min(90, Number(lookbackDays) || 30)), cutoff = Date.now() - days * 86400000, metadata = [], pageToken;
   do {
-    var response = Gmail.Users.Messages.list("me", { q: "newer_than:" + days + "d", maxResults: 500, pageToken: pageToken });
-    (response.messages || []).forEach(function(message) { if (message && message.id) ids[message.id] = true; });
+    // Do not pass q here: this connector intentionally uses the Gmail
+    // metadata scope, and Gmail rejects search queries with that scope.
+    var response = Gmail.Users.Messages.list("me", { maxResults: 500, pageToken: pageToken }), pageHasRecent = false;
+    (response.messages || []).forEach(function(message) {
+      if (!message || !message.id) return;
+      var item = gmailMetadata_(message.id, true);
+      if (item && new Date(item.receivedAt).getTime() >= cutoff) { metadata.push(item); pageHasRecent = true; }
+    });
     pageToken = response.nextPageToken;
+    if (!pageHasRecent) pageToken = null;
   } while (pageToken);
-  return Object.keys(ids);
+  return metadata;
 }
 
 function gmailChangesSince_(historyId) {

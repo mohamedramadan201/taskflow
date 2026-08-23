@@ -7,5 +7,7 @@ const code = readFileSync(new URL("../integrations/google-apps-script/Code.gs", 
 test("Apps Script manual sync requests the configured lookback window", () => {
   assert.match(code, /syncRequestedAt \|\| !config\.historyId/);
   assert.match(code, /gmailMessagesFromLookback_\(config\.monitor && config\.monitor\.lookbackDays\)/);
-  assert.match(code, /q: "newer_than:" \+ days \+ "d"/);
+  assert.match(code, /Gmail\.Users\.Messages\.list\("me", \{ maxResults: 500, pageToken: pageToken \}\)/);
+  assert.doesNotMatch(code, /q: "newer_than:/);
+  assert.match(code, /new Date\(item\.receivedAt\)\.getTime\(\) >= cutoff/);
 });
