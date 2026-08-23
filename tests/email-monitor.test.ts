@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { evaluateEmailMonitorThread, monitorNeedsAction } from "../src/lib/email-monitor.ts";
+import { emailMonitorMessageIsExcluded, evaluateEmailMonitorThread, monitorNeedsAction } from "../src/lib/email-monitor.ts";
 
 const config = { targetAddress: "ecommerce.catalog@example.com", responderEmails: ["catalog.owner@example.com"], slaHours: 4, excludedSenderEmails: [], excludedSubjectKeywords: [] };
 const now = new Date("2026-08-23T12:00:00Z");
@@ -37,4 +37,11 @@ test("direct messages to a team member are not monitored", () => {
 test("excluded sender and subject messages do not create a pending thread", () => {
   const result = evaluateEmailMonitorThread([incoming("2026-08-23T06:00:00Z", "no-reply@example.com"), { ...incoming("2026-08-23T06:00:00Z"), subject: "System alert" }], { ...config, excludedSenderEmails: ["no-reply@example.com"], excludedSubjectKeywords: ["system alert"] }, now);
   assert.equal(result.status, "WAITING");
+});
+
+test("configured monitor exclusions also prevent inbox capture", () => {
+  const excludedConfig = { excludedSenderEmails: ["no-reply@example.com"], excludedSubjectKeywords: ["system alert"] };
+  assert.equal(emailMonitorMessageIsExcluded(incoming("2026-08-23T06:00:00Z", "NO-REPLY@example.com"), excludedConfig), true);
+  assert.equal(emailMonitorMessageIsExcluded({ ...incoming("2026-08-23T06:00:00Z"), subject: "Daily SYSTEM ALERT" }, excludedConfig), true);
+  assert.equal(emailMonitorMessageIsExcluded(incoming("2026-08-23T06:00:00Z"), excludedConfig), false);
 });

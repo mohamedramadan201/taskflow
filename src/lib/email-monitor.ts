@@ -41,7 +41,7 @@ function includesTarget(message: MonitorMessage, targetAddress: string) {
   return [...message.toAddresses, ...message.ccAddresses].some((address) => normalize(address) === target);
 }
 
-function excluded(message: MonitorMessage, config: EmailMonitorConfig) {
+export function emailMonitorMessageIsExcluded(message: MonitorMessage, config: Pick<EmailMonitorConfig, "excludedSenderEmails" | "excludedSubjectKeywords">) {
   const sender = normalize(message.senderAddress);
   if (unique(config.excludedSenderEmails).includes(sender)) return true;
   const subject = normalize(message.subject);
@@ -68,7 +68,7 @@ export function evaluateEmailMonitorThread(messages: MonitorMessage[], config: E
   let latest: { kind: "team" | "external"; message: MonitorMessage; address: string } | null = null;
 
   for (const message of ordered) {
-    if (excluded(message, config)) continue;
+    if (emailMonitorMessageIsExcluded(message, config)) continue;
     const sender = normalize(message.senderAddress);
     const isResponder = responders.includes(sender);
     if (isResponder) {

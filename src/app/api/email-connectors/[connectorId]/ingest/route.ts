@@ -1,5 +1,5 @@
 import { dedupeInboundEmails, emailPassesRules } from "@/lib/email-connectors";
-import { evaluateEmailMonitorThread } from "@/lib/email-monitor";
+import { emailMonitorMessageIsExcluded, evaluateEmailMonitorThread } from "@/lib/email-monitor";
 import { errorResponse } from "@/lib/server/authorization";
 import { requireEmailConnector } from "@/lib/server/email-connector-auth";
 import { prisma } from "@/lib/server/prisma";
@@ -9,7 +9,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ con
   try {
     const { connectorId } = await params; const connector = await requireEmailConnector(request, connectorId); const input = await parseJson(request, emailIngestSchema); const now = new Date();
     if (input.error) { await prisma.emailConnector.update({ where: { id: connector.id }, data: { lastHeartbeatAt: now, lastError: input.error } }); return Response.json({ accepted: 0, errorRecorded: true }); }
-    const accepted = input.emails.filter((email) => emailPassesRules(email, connector.mailboxAddress, connector.filters));
+    const accepted = input.emails.filter((email) => emailPassesRules(email, connector.mailboxAddress, connector.filters) && !(connector.monitorEnabled && emailMonitorMessageIsExcluded(email, { excludedSenderEmails: connector.monitorExcludedSenderEmails, excludedSubjectKeywords: connector.monitorExcludedSubjectKeywords })));
     const uniqueAccepted = dedupeInboundEmails(accepted);
     const result = await prisma.$transaction(async (tx) => {
       const internetMessageIds = [...new Set(uniqueAccepted.map((email) => email.internetMessageId?.trim().toLowerCase()).filter((value): value is string => Boolean(value)))];

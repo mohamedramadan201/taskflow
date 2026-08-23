@@ -135,7 +135,7 @@ export const emailIngestSchema = z.object({
       receivedAt: z.string().datetime(),
       isSent: z.boolean().default(false),
     })).max(200),
-  })).max(50).default([]),
+  })).max(250).default([]),
 });
 export const emailActionSchema = z.object({ status: z.enum(["UNTRIAGED", "DISMISSED", "NO_ACTION_NEEDED"]) });
 export const emailBulkActionSchema = z.object({
