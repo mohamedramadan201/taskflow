@@ -70,7 +70,7 @@ export const workspaceReminderSettingsSchema = z.object({
 export const commentSchema = z.object({ body: z.string().trim().min(1).max(2000) });
 export const invitationSchema = z.object({ email: z.string().email(), role: roleSchema.default("MEMBER"), teamGroupId: z.string().min(1).nullable().optional() });
 export const invitationRegistrationSchema = z.object({ name: z.string().trim().min(2).max(80), password: z.string().min(8).max(128) });
-export const automationEmailResultSchema = z.object({ kind: z.enum(["INVITATION", "NOTIFICATION"]), id: z.string().min(1), success: z.boolean(), error: z.string().trim().max(500).optional().nullable() });
+export const automationEmailResultSchema = z.object({ kind: z.enum(["INVITATION", "NOTIFICATION", "MONITOR_SUMMARY"]), id: z.string().min(1), success: z.boolean(), error: z.string().trim().max(500).optional().nullable() });
 export const teamGroupSchema = z.object({ name: z.string().trim().min(2).max(60) });
 export const checklistItemSchema = z.object({ title: z.string().trim().min(1).max(200), completed: z.boolean().optional() });
 export const notificationPreferenceSchema = z.object({ emailNotifications: z.boolean().optional(), taskReminderNotifications: z.boolean().optional() }).refine((data) => Object.keys(data).length > 0);
@@ -104,6 +104,16 @@ export const emailConnectorInputSchema = z.object({
 export const emailConnectorPatchSchema = z.object({
   displayName: z.string().trim().max(80).optional().nullable(), enabled: z.boolean().optional(),
   syncIntervalMinutes: z.union([z.literal(1), z.literal(5), z.literal(10), z.literal(15), z.literal(30), z.literal(60)]).optional(),
+  monitor: z.object({
+    enabled: z.boolean(),
+    slaHours: z.number().int().min(1).max(168),
+    responderEmails: z.array(z.string().trim().toLowerCase().email()).max(100),
+    excludedSenderEmails: z.array(z.string().trim().toLowerCase().email()).max(100),
+    excludedSubjectKeywords: z.array(z.string().trim().min(1).max(120)).max(100),
+    summaryRecipients: z.array(z.string().trim().toLowerCase().email()).max(100),
+    summaryEveryHours: z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(6), z.literal(8), z.literal(12)]),
+    lookbackDays: z.number().int().min(1).max(90),
+  }).optional(),
   filters: z.array(emailFilterRuleSchema).max(100).optional(),
 }).refine((data) => Object.keys(data).length > 0);
 export const inboundEmailSchema = z.object({
@@ -115,6 +125,17 @@ export const inboundEmailSchema = z.object({
 });
 export const emailIngestSchema = z.object({
   historyId: z.string().max(100).optional().nullable(), emails: z.array(inboundEmailSchema).max(50), error: z.string().trim().max(500).optional().nullable(),
+  threadSnapshots: z.array(z.object({
+    gmailThreadId: z.string().min(1).max(200),
+    messages: z.array(z.object({
+      senderAddress: z.string().trim().toLowerCase().email(),
+      toAddresses: z.array(z.string().trim().toLowerCase().email()).max(100).default([]),
+      ccAddresses: z.array(z.string().trim().toLowerCase().email()).max(100).default([]),
+      subject: z.string().trim().max(500).default("(No subject)"),
+      receivedAt: z.string().datetime(),
+      isSent: z.boolean().default(false),
+    })).max(200),
+  })).max(50).default([]),
 });
 export const emailActionSchema = z.object({ status: z.enum(["UNTRIAGED", "DISMISSED", "NO_ACTION_NEEDED"]) });
 export const emailBulkActionSchema = z.object({

@@ -1,4 +1,5 @@
 import { dedupeInboundEmails, emailPassesRules } from "@/lib/email-connectors";
+import { evaluateEmailMonitorThread } from "@/lib/email-monitor";
 import { errorResponse } from "@/lib/server/authorization";
 import { requireEmailConnector } from "@/lib/server/email-connector-auth";
 import { prisma } from "@/lib/server/prisma";
@@ -21,6 +22,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ con
       const existingInternetMessageIds = new Set(existing.map((email) => email.internetMessageId?.trim().toLowerCase()).filter((value): value is string => Boolean(value)));
       const fresh = uniqueAccepted.filter((email) => !existingGmailIds.has(email.gmailMessageId) && !(email.internetMessageId && existingInternetMessageIds.has(email.internetMessageId.trim().toLowerCase())));
       const created = fresh.length ? await tx.inboundEmail.createMany({ skipDuplicates: true, data: fresh.map((email) => ({ workspaceId: connector.workspaceId, connectorId: connector.id, gmailMessageId: email.gmailMessageId, gmailThreadId: email.gmailThreadId, internetMessageId: email.internetMessageId?.trim().toLowerCase() || null, senderAddress: email.senderAddress, senderName: email.senderName || null, toAddresses: [...new Set(email.toAddresses)], ccAddresses: [...new Set(email.ccAddresses)], deliveredTo: [...new Set(email.deliveredTo)], subject: email.subject || "(No subject)", snippet: email.snippet || null, receivedAt: new Date(email.receivedAt) })) }) : { count: 0 };
+      if (connector.monitorEnabled) {
+        for (const snapshot of input.threadSnapshots) {
+          const previous = await tx.emailMonitorThread.findUnique({ where: { connectorId_gmailThreadId: { connectorId: connector.id, gmailThreadId: snapshot.gmailThreadId } } });
+          const evaluation = evaluateEmailMonitorThread(snapshot.messages.map((message) => ({ ...message, receivedAt: new Date(message.receivedAt) })), { targetAddress: connector.mailboxAddress, responderEmails: connector.monitorResponderEmails, slaHours: connector.monitorSlaHours, excludedSenderEmails: connector.monitorExcludedSenderEmails, excludedSubjectKeywords: connector.monitorExcludedSubjectKeywords }, now, previous?.status === "HANDLED" || previous?.status === "REOPENED", previous?.manualNoActionMessageAt || null);
+          const latestExternal = evaluation.latestExternalMessageAt;
+          const manualStillApplies = Boolean(previous?.manualNoActionMessageAt && latestExternal && latestExternal.getTime() <= previous.manualNoActionMessageAt.getTime());
+          await tx.emailMonitorThread.upsert({
+            where: { connectorId_gmailThreadId: { connectorId: connector.id, gmailThreadId: snapshot.gmailThreadId } },
+            create: { workspaceId: connector.workspaceId, connectorId: connector.id, gmailThreadId: snapshot.gmailThreadId, status: evaluation.status, latestRelevantSenderAddress: evaluation.latestRelevantSenderAddress, latestRelevantMessageAt: evaluation.latestRelevantMessageAt, latestExternalMessageAt: evaluation.latestExternalMessageAt, teamReplyAt: evaluation.teamReplyAt, slaDueAt: evaluation.slaDueAt, priority: evaluation.priority, agingBucket: evaluation.agingBucket, lastEvaluatedAt: now },
+            update: { status: evaluation.status, latestRelevantSenderAddress: evaluation.latestRelevantSenderAddress, latestRelevantMessageAt: evaluation.latestRelevantMessageAt, latestExternalMessageAt: evaluation.latestExternalMessageAt, teamReplyAt: evaluation.teamReplyAt, slaDueAt: evaluation.slaDueAt, priority: evaluation.priority, agingBucket: evaluation.agingBucket, lastEvaluatedAt: now, ...(manualStillApplies ? {} : { manualNoActionAt: null, manualNoActionMessageAt: null }) },
+          });
+        }
+      }
       await tx.emailConnector.update({ where: { id: connector.id }, data: { historyId: input.historyId, lastHeartbeatAt: now, lastSyncAt: now, lastError: null, syncRequestedAt: null } });
       return created.count;
     });

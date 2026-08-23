@@ -8,12 +8,37 @@ import { hashInvitationToken } from "./invitations";
 const CLAIM_LEASE_MS = 10 * 60 * 1000;
 
 export type AutomationEmailWork = {
-  kind: "INVITATION" | "NOTIFICATION";
+  kind: "INVITATION" | "NOTIFICATION" | "MONITOR_SUMMARY";
   id: string;
   to: string;
   subject: string;
   body: string;
 };
+
+async function claimMonitorSummary(connector: { id: string; workspaceId: string; displayName: string | null; mailboxAddress: string; monitorSummaryRecipients: string[]; monitorSummaryEveryHours: number }, now: Date) {
+  if (!connector.monitorSummaryRecipients.length) return null;
+  const claimed = await prisma.emailConnector.updateMany({ where: { id: connector.id, monitorEnabled: true, OR: [{ monitorSummaryClaimedAt: null }, { monitorSummaryClaimedAt: { lt: new Date(now.getTime() - CLAIM_LEASE_MS) } }] }, data: { monitorSummaryClaimedAt: now, monitorSummaryLastError: null } });
+  if (!claimed.count) return null;
+  const threads = await prisma.emailMonitorThread.findMany({ where: { connectorId: connector.id, status: { in: ["NEEDS_REPLY", "REOPENED"] } }, orderBy: [{ priority: "desc" }, { latestExternalMessageAt: "asc" }], take: 100 });
+  if (!threads.length) {
+    await prisma.emailConnector.update({ where: { id: connector.id }, data: { monitorSummaryClaimedAt: null } });
+    return null;
+  }
+  const counts = { "4-8h": 0, "8-24h": 0, "24h+": 0 };
+  const top = [] as Array<{ subject: string; sender: string; receivedAt: Date; agingBucket: string | null }>;
+  for (const thread of threads) {
+    if (thread.agingBucket && thread.agingBucket in counts) counts[thread.agingBucket as keyof typeof counts] += 1;
+  }
+  for (const thread of threads.slice(0, 10)) {
+    const email = await prisma.inboundEmail.findFirst({ where: { connectorId: connector.id, gmailThreadId: thread.gmailThreadId }, orderBy: { receivedAt: "desc" }, select: { subject: true, senderAddress: true, receivedAt: true } });
+    top.push({ subject: email?.subject || "(No subject)", sender: email?.senderAddress || thread.latestRelevantSenderAddress || "Unknown sender", receivedAt: thread.latestExternalMessageAt || email?.receivedAt || now, agingBucket: thread.agingBucket });
+  }
+  let body = `Reply monitoring summary for ${connector.displayName || connector.mailboxAddress}\n\n`;
+  body += `${threads.length} email thread${threads.length === 1 ? "" : "s"} need${threads.length === 1 ? "s" : ""} action.\n`;
+  body += `- ${counts["4-8h"]} pending 4-8 hours\n- ${counts["8-24h"]} pending 8-24 hours\n- ${counts["24h+"]} pending 24+ hours\n\nTop pending threads:\n`;
+  top.forEach((item, index) => { body += `\n${index + 1}. ${item.subject}\n   Sender: ${item.sender}\n   Waiting since: ${item.receivedAt.toISOString()}\n   Aging: ${item.agingBucket || "Overdue"}\n`; });
+  return { kind: "MONITOR_SUMMARY" as const, id: connector.id, to: connector.monitorSummaryRecipients.join(","), subject: `[TaskFlow] Reply monitoring summary — ${connector.displayName || connector.mailboxAddress}`, body };
+}
 
 async function prepareReminderQueue(workspaceId: string, limit: number) {
   const due = await prisma.reminder.findMany({
@@ -69,6 +94,15 @@ export async function claimEmailWork(workspaceId: string, requestUrl: string, li
   const publicUrl = taskflowPublicUrl(requestUrl);
   if (!publicUrl) throw new Error("TASKFLOW_PUBLIC_URL is not configured");
   const work: AutomationEmailWork[] = [];
+  const monitorConnectors = await prisma.emailConnector.findMany({ where: { workspaceId, enabled: true, monitorEnabled: true }, select: { id: true, workspaceId: true, displayName: true, mailboxAddress: true, monitorSummaryRecipients: true, monitorSummaryEveryHours: true, monitorLastSummaryAt: true, monitorSummaryClaimedAt: true }, orderBy: { createdAt: "asc" }, take: safeLimit });
+  for (const connector of monitorConnectors) {
+    if (work.length >= safeLimit || !connector.monitorSummaryRecipients.length) break;
+    const dueAt = connector.monitorLastSummaryAt ? new Date(connector.monitorLastSummaryAt.getTime() + connector.monitorSummaryEveryHours * 3_600_000) : now;
+    const claimExpired = !connector.monitorSummaryClaimedAt || connector.monitorSummaryClaimedAt.getTime() < now.getTime() - CLAIM_LEASE_MS;
+    if (dueAt > now || !claimExpired) continue;
+    const item = await claimMonitorSummary(connector, now);
+    if (item) work.push(item);
+  }
   const invitations = await prisma.workspaceInvitation.findMany({ where: { workspaceId, acceptedAt: null, expiresAt: { gt: now }, emailStatus: { in: ["PENDING", "FAILED"] }, emailAttempts: { lt: 3 }, OR: [{ emailClaimedAt: null }, { emailClaimedAt: { lt: new Date(now.getTime() - CLAIM_LEASE_MS) } }] }, include: { workspace: { select: { name: true } }, invitedBy: { select: { email: true } } }, orderBy: { createdAt: "asc" }, take: safeLimit });
   for (const invitation of invitations) {
     if (work.length >= safeLimit) break;
@@ -85,9 +119,14 @@ export async function claimEmailWork(workspaceId: string, requestUrl: string, li
   return work;
 }
 
-export async function completeEmailWork(workspaceId: string, input: { kind: "INVITATION" | "NOTIFICATION"; id: string; success: boolean; error?: string | null }) {
+export async function completeEmailWork(workspaceId: string, input: { kind: "INVITATION" | "NOTIFICATION" | "MONITOR_SUMMARY"; id: string; success: boolean; error?: string | null }) {
   const now = new Date();
   const message = input.error?.slice(0, 500) || "Apps Script delivery failed";
+  if (input.kind === "MONITOR_SUMMARY") {
+    const result = await prisma.emailConnector.updateMany({ where: { id: input.id, workspaceId }, data: input.success ? { monitorLastSummaryAt: now, monitorSummaryClaimedAt: null, monitorSummaryLastError: null } : { monitorSummaryClaimedAt: null, monitorSummaryLastError: message } });
+    if (!result.count) throw new Error("Monitor summary connector not found");
+    return { id: input.id, success: input.success };
+  }
   if (input.kind === "INVITATION") {
     const result = await prisma.workspaceInvitation.updateMany({ where: { id: input.id, workspaceId }, data: input.success ? { emailStatus: "SENT", emailSentAt: now, emailLastError: null, emailClaimedAt: null } : { emailStatus: "FAILED", emailLastError: message, emailClaimedAt: null } });
     if (!result.count) throw new Error("Invitation delivery item not found");

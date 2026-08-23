@@ -100,6 +100,14 @@ enum EmailFilterMatchType {
   DOMAIN
 }
 
+enum EmailMonitorStatus {
+  WAITING
+  NEEDS_REPLY
+  HANDLED
+  REOPENED
+  NO_ACTION_NEEDED
+}
+
 model User {
   id                        String                @id @default(cuid())
   email                     String                @unique
@@ -116,7 +124,7 @@ model User {
   comments                  Comment[]
   notifications             Notification[]
   reminders                 Reminder[]
-  createdWorkspaceReminders WorkspaceReminder[] @relation("WorkspaceReminderCreator")
+  createdWorkspaceReminders WorkspaceReminder[]   @relation("WorkspaceReminderCreator")
   invitationsSent           WorkspaceInvitation[] @relation("InvitationInviter")
   invitationsReceived       WorkspaceInvitation[] @relation("InvitationInvitee")
   savedTaskViews            SavedTaskView[]
@@ -127,30 +135,31 @@ model User {
 }
 
 model Workspace {
-  id                 String                    @id @default(cuid())
-  name               String
-  slug               String                    @unique
-  createdAt          DateTime                  @default(now())
-  members            WorkspaceMember[]
-  tasks              Task[]
-  activities         ActivityEvent[]
-  comments           Comment[]
-  notifications      Notification[]
-  reminders          Reminder[]
-  workspaceReminders WorkspaceReminder[]
-  reminderSettings   WorkspaceReminderSettings?
-  reminderLogs       WorkspaceReminderLog[]
-  invitations        WorkspaceInvitation[]
-  customRoles        WorkspaceRoleDefinition[]
-  teamGroups         TeamGroup[]
-  taskLabels         TaskLabel[]
-  savedTaskViews     SavedTaskView[]
-  memberAvailability MemberAvailability[]
-  overloadThreshold  Int                       @default(100)
-  dueSoonDays        Int                       @default(2)
-  stalledAfterDays   Int                       @default(5)
-  emailConnectors    EmailConnector[]
-  inboundEmails      InboundEmail[]
+  id                  String                     @id @default(cuid())
+  name                String
+  slug                String                     @unique
+  createdAt           DateTime                   @default(now())
+  members             WorkspaceMember[]
+  tasks               Task[]
+  activities          ActivityEvent[]
+  comments            Comment[]
+  notifications       Notification[]
+  reminders           Reminder[]
+  workspaceReminders  WorkspaceReminder[]
+  reminderSettings    WorkspaceReminderSettings?
+  reminderLogs        WorkspaceReminderLog[]
+  invitations         WorkspaceInvitation[]
+  customRoles         WorkspaceRoleDefinition[]
+  teamGroups          TeamGroup[]
+  taskLabels          TaskLabel[]
+  emailConnectors     EmailConnector[]
+  emailMonitorThreads EmailMonitorThread[]
+  savedTaskViews      SavedTaskView[]
+  memberAvailability  MemberAvailability[]
+  overloadThreshold   Int                        @default(100)
+  dueSoonDays         Int                        @default(2)
+  stalledAfterDays    Int                        @default(5)
+  inboundEmails       InboundEmail[]
 }
 
 model WorkspaceMember {
@@ -279,27 +288,39 @@ model Task {
 }
 
 model EmailConnector {
-  id                  String            @id @default(cuid())
-  workspaceId         String
-  mailboxAddress      String
-  displayName         String?
-  tokenHash           String            @unique
-  enabled             Boolean           @default(true)
-  syncIntervalMinutes Int               @default(5)
-  historyId           String?
-  configVersion       Int               @default(1)
-  syncRequestedAt     DateTime?
-  lastHeartbeatAt     DateTime?
-  lastSyncStartedAt   DateTime?
-  lastSyncAt          DateTime?
-  lastError           String?
-  createdByUserId     String
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  workspace           Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdBy           User              @relation("EmailConnectorCreator", fields: [createdByUserId], references: [id])
-  filters             EmailFilterRule[]
-  emails              InboundEmail[]
+  id                             String               @id @default(cuid())
+  workspaceId                    String
+  mailboxAddress                 String
+  displayName                    String?
+  tokenHash                      String               @unique
+  enabled                        Boolean              @default(true)
+  syncIntervalMinutes            Int                  @default(5)
+  historyId                      String?
+  configVersion                  Int                  @default(1)
+  syncRequestedAt                DateTime?
+  lastHeartbeatAt                DateTime?
+  lastSyncStartedAt              DateTime?
+  lastSyncAt                     DateTime?
+  lastError                      String?
+  monitorEnabled                 Boolean              @default(false)
+  monitorSlaHours                Int                  @default(4)
+  monitorResponderEmails         String[]             @default([])
+  monitorExcludedSenderEmails    String[]             @default([])
+  monitorExcludedSubjectKeywords String[]             @default([])
+  monitorSummaryRecipients       String[]             @default([])
+  monitorSummaryEveryHours       Int                  @default(4)
+  monitorLookbackDays            Int                  @default(30)
+  monitorLastSummaryAt           DateTime?
+  monitorSummaryClaimedAt        DateTime?
+  monitorSummaryLastError        String?
+  createdByUserId                String
+  createdAt                      DateTime             @default(now())
+  updatedAt                      DateTime             @updatedAt
+  workspace                      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy                      User                 @relation("EmailConnectorCreator", fields: [createdByUserId], references: [id])
+  filters                        EmailFilterRule[]
+  emails                         InboundEmail[]
+  monitorThreads                 EmailMonitorThread[]
 
   @@unique([workspaceId, mailboxAddress])
   @@index([workspaceId, enabled, createdAt])
@@ -522,36 +543,62 @@ model Reminder {
   @@index([status, scheduledAt])
 }
 
+model EmailMonitorThread {
+  id                          String             @id @default(cuid())
+  workspaceId                 String
+  connectorId                 String
+  gmailThreadId               String
+  status                      EmailMonitorStatus @default(WAITING)
+  latestRelevantSenderAddress String?
+  latestRelevantMessageAt     DateTime?
+  latestExternalMessageAt     DateTime?
+  teamReplyAt                 DateTime?
+  slaDueAt                    DateTime?
+  priority                    String?
+  agingBucket                 String?
+  manualNoActionAt            DateTime?
+  manualNoActionMessageAt     DateTime?
+  lastEvaluatedAt             DateTime?
+  createdAt                   DateTime           @default(now())
+  updatedAt                   DateTime           @updatedAt
+  workspace                   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connector                   EmailConnector     @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@unique([connectorId, gmailThreadId])
+  @@index([workspaceId, status, slaDueAt])
+  @@index([connectorId, latestRelevantMessageAt])
+}
+
 model WorkspaceReminder {
-  id                    String                   @id @default(cuid())
-  workspaceId           String
-  title                 String
-  details               String?
-  assignedEmails        String[]                 @default([])
-  reminderAt            DateTime
-  status                WorkspaceReminderStatus  @default(PENDING)
-  createdByUserId       String
-  createdAt             DateTime                 @default(now())
-  sentAt                DateTime?
-  cancelledAt           DateTime?
-  doneAt                DateTime?
-  lastUpdatedAt         DateTime                 @updatedAt
-  notes                 String?
-  errorMessage          String?
-  repeatType            RecurrenceType           @default(NONE)
-  repeatInterval        Int                      @default(1)
-  repeatEndDate         DateTime?
-  occurrenceCount       Int                      @default(0)
-  lastSentAt            DateTime?
-  priority              WorkspaceReminderPriority @default(MEDIUM)
-  tags                  String[]                 @default([])
-  calendarPopupMinutes  Int                      @default(10)
-  snoozedAt             DateTime?
-  snoozeCount           Int                      @default(0)
-  archivedAt            DateTime?
-  workspace             Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdBy             User                     @relation("WorkspaceReminderCreator", fields: [createdByUserId], references: [id])
-  logs                  WorkspaceReminderLog[]
+  id                   String                    @id @default(cuid())
+  workspaceId          String
+  title                String
+  details              String?
+  assignedEmails       String[]                  @default([])
+  reminderAt           DateTime
+  status               WorkspaceReminderStatus   @default(PENDING)
+  createdByUserId      String
+  createdAt            DateTime                  @default(now())
+  sentAt               DateTime?
+  cancelledAt          DateTime?
+  doneAt               DateTime?
+  lastUpdatedAt        DateTime                  @updatedAt
+  notes                String?
+  errorMessage         String?
+  repeatType           RecurrenceType            @default(NONE)
+  repeatInterval       Int                       @default(1)
+  repeatEndDate        DateTime?
+  occurrenceCount      Int                       @default(0)
+  lastSentAt           DateTime?
+  priority             WorkspaceReminderPriority @default(MEDIUM)
+  tags                 String[]                  @default([])
+  calendarPopupMinutes Int                       @default(10)
+  snoozedAt            DateTime?
+  snoozeCount          Int                       @default(0)
+  archivedAt           DateTime?
+  workspace            Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy            User                      @relation("WorkspaceReminderCreator", fields: [createdByUserId], references: [id])
+  logs                 WorkspaceReminderLog[]
 
   @@index([workspaceId, status, reminderAt])
   @@index([workspaceId, createdAt])
@@ -563,7 +610,7 @@ model WorkspaceReminderLog {
   workspaceId    String
   reminderId     String?
   taskTitle      String
-  assignedEmails String               @default("")
+  assignedEmails String             @default("")
   action         String
   result         String
   message        String
@@ -576,18 +623,18 @@ model WorkspaceReminderLog {
 }
 
 model WorkspaceReminderSettings {
-  id                         String    @id @default(cuid())
-  workspaceId                String    @unique
-  defaultAssignedEmails     String[]  @default([])
-  assigneeDirectoryEmails   String[]  @default([])
-  defaultCalendarPopupMinutes Int      @default(10)
-  defaultEmailIntro         String    @default("Hello,\n\nThis is a reminder for the following task:")
-  defaultEmailSignature     String    @default("Regards,\nTaskFlow")
-  sendCopyToCreator         Boolean   @default(false)
-  archiveAfterDays          Int       @default(90)
-  createdAt                 DateTime  @default(now())
-  updatedAt                 DateTime  @updatedAt
-  workspace                 Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                          String    @id @default(cuid())
+  workspaceId                 String    @unique
+  defaultAssignedEmails       String[]  @default([])
+  assigneeDirectoryEmails     String[]  @default([])
+  defaultCalendarPopupMinutes Int       @default(10)
+  defaultEmailIntro           String    @default("Hello,\n\nThis is a reminder for the following task:")
+  defaultEmailSignature       String    @default("Regards,\nTaskFlow")
+  sendCopyToCreator           Boolean   @default(false)
+  archiveAfterDays            Int       @default(90)
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+  workspace                   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 model TelegramConnection {
