@@ -1110,3 +1110,132 @@ body .space-error { display:block; margin:6px 4px 0; color:#ffccbc; font-size:10
   body .mobile-navigation-drawer .workspace-switcher .space-row .space-item { width:auto; }
   body .mobile-navigation-drawer .workspace-switcher .space-row-actions button { min-width:30px!important; min-height:32px!important; }
 }
+
+/* Kanban reference layout: light canvas, quiet headers, and distinct completed cards. */
+body .board {
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:30px;
+  overflow:visible;
+}
+body .board .column {
+  min-width:0;
+  width:100%;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  overflow:visible;
+}
+body .board .column-title {
+  min-height:34px;
+  margin:0 0 14px;
+  padding:0;
+  gap:10px;
+}
+body .board .column-title h2 {
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  margin:0;
+  padding:0;
+  border-radius:0;
+  background:transparent;
+  color:#111c19;
+  font-size:18px;
+  letter-spacing:-.25px;
+}
+body .board .column-title h2::before {
+  content:"";
+  width:10px;
+  height:10px;
+  flex:0 0 10px;
+  border-radius:50%;
+}
+body .board .status-column-todo .column-title h2::before { background:#8d6bb2; }
+body .board .status-column-in-progress .column-title h2::before { background:#996b13; }
+body .board .status-column-done .column-title h2::before { background:#22653a; }
+body .board .column-title > span {
+  display:inline-grid;
+  place-items:center;
+  min-width:36px;
+  height:28px;
+  padding:0 9px;
+  border:1px solid #d5ddd8;
+  border-radius:999px;
+  background:#f8faf8;
+  color:#475650;
+  font-size:13px;
+}
+body .board .cards { min-width:0; gap:18px; }
+body .board .task-card {
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box;
+  overflow:hidden;
+  padding:24px;
+  border:1px solid #d7dfda;
+  border-radius:17px;
+  background:#fffefd;
+  box-shadow:0 3px 10px #173c330b;
+}
+body .board .task-card:hover { border-color:#c5d2ca; box-shadow:0 9px 22px #173c3314; }
+body .board .task-card h3 {
+  min-width:0;
+  margin:17px 0 7px;
+  color:#14221e;
+  font-size:19px;
+  line-height:1.25;
+  overflow-wrap:anywhere;
+}
+body .board .task-card p {
+  min-width:0;
+  min-height:0;
+  margin:0;
+  color:#52635c;
+  font-size:15px;
+  line-height:1.55;
+  overflow-wrap:anywhere;
+}
+body .board .task-card .task-meta {
+  min-width:0;
+  margin-top:18px;
+  padding-top:16px;
+  border-top:1px solid #dce4df;
+  color:#34463f;
+  font-size:14px;
+  overflow-wrap:anywhere;
+}
+body .board .task-card .task-meta .avatar.mini { display:none; }
+body .board .task-card .task-meta .follow-up-meta { color:#435b50; font-size:13px; font-weight:600; }
+body .board .task-card .assignment-controls.compact { margin-top:12px; padding-top:12px; }
+body .board .task-card .assignment-controls.compact select { min-width:120px; }
+@media (min-width:701px) and (hover:hover) {
+  body .board .task-card .card-actions { max-height:0; margin-top:0; overflow:hidden; opacity:0; pointer-events:none; transition:max-height .18s ease, margin-top .18s ease, opacity .18s ease; }
+  body .board .task-card:hover .card-actions,
+  body .board .task-card:focus-within .card-actions { max-height:48px; margin-top:12px; opacity:1; pointer-events:auto; }
+}
+body .board .status-column-done .task-card {
+  border-color:#cfe2d2;
+  background:#dceede;
+  box-shadow:none;
+}
+body .board .status-column-done .task-card h3 {
+  color:#30483b;
+  text-decoration:line-through;
+}
+body .board .status-column-done .task-card p,
+body .board .status-column-done .task-card .task-meta { color:#5c7064; }
+body .board .status-column-done .task-card .task-meta { border-top-color:#c6ddca; }
+body .board .task-card h3,
+body .board .task-card p,
+body .board .task-card .task-meta,
+body .board .task-card .assignment-controls { min-width:0; }
+body .board .task-card .card-actions { min-width:0; }
+
+@media (max-width:700px) {
+  body .board { grid-template-columns:1fr; gap:24px; overflow:visible; }
+  body .board .task-card { padding:19px; border-radius:15px; }
+  body .board .task-card h3 { font-size:17px; }
+  body .board .task-card p { font-size:14px; }
+}
