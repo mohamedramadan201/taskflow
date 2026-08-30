@@ -124,7 +124,7 @@ export const inboundEmailSchema = z.object({
   snippet: z.string().trim().max(1000).optional().nullable(), receivedAt: z.string().datetime(),
 });
 export const emailIngestSchema = z.object({
-  historyId: z.string().max(100).optional().nullable(), emails: z.array(inboundEmailSchema).max(50), error: z.string().trim().max(500).optional().nullable(),
+  historyId: z.string().max(100).optional().nullable(), syncComplete: z.boolean().default(true), emails: z.array(inboundEmailSchema).max(50), error: z.string().trim().max(500).optional().nullable(),
   threadSnapshots: z.array(z.object({
     gmailThreadId: z.string().min(1).max(200),
     messages: z.array(z.object({

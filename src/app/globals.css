@@ -386,6 +386,19 @@ body{font-family:var(--font-ui)}
   .main-content{padding:24px 16px 54px}
 }
 
+/* Keep task assignment, status, and reminder actions together. */
+.task-card-controls{display:flex;align-items:center;gap:8px;margin-top:12px;min-width:0}
+.task-card-controls .assignment-select{flex:1 1 0;min-width:0}
+.task-card-controls .card-actions{display:flex;align-items:center;gap:8px;flex:1 1 0;margin-top:0;min-width:0}
+.task-card-controls .card-actions .status-select{flex:1 1 0;min-width:0}
+.task-card-controls .card-actions button{white-space:nowrap}
+.assignment-select{border:1px solid var(--line);background:white;border-radius:7px;padding:6px;font-size:10px}
+@media(max-width:700px){
+  .task-card-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:6px}
+  .task-card-controls .card-actions{display:contents}
+  .task-card-controls .card-actions button,.task-card-controls .assignment-select,.task-card-controls .status-select{min-width:0;min-height:40px;font-size:11px}
+}
+
 /* Mobile spaces use wrapping pills so every workspace remains visible without clipping. */
 @media (max-width:900px){
   .mobile-navigation-drawer .workspace-switcher .space-list{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:10px 12px;overflow:visible;padding:0 8px}

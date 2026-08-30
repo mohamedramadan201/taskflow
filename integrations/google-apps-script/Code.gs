@@ -1,5 +1,8 @@
 /** TaskFlow Gmail metadata connector. Requires the Advanced Gmail service (v1). */
 var TASKFLOW_KEYS = { baseUrl: "TASKFLOW_BASE_URL", connectorId: "TASKFLOW_CONNECTOR_ID", token: "TASKFLOW_CONNECTOR_TOKEN" };
+var BACKFILL_BATCH_SIZE_ = 25;
+var BACKFILL_PAGE_SIZE_ = 100;
+var GMAIL_QUOTA_BACKOFF_MS_ = 5 * 60 * 1000;
 
 function configureTaskFlow() {
   var properties = PropertiesService.getScriptProperties();
@@ -46,49 +49,120 @@ function processTaskFlowQueue() {
 }
 
 function syncTaskFlow() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return;
+  try { syncTaskFlowLocked_(); } finally { lock.releaseLock(); }
+}
+
+function syncTaskFlowLocked_() {
   var config;
   try {
     config = taskflowRequest_("sync-config", "get");
     if (!config.enabled || !config.shouldSync) return;
-    var changes = config.historyId ? gmailChangesSince_(config.historyId) : { messageIds: [], historyId: String(Gmail.Users.getProfile("me").historyId) };
+    var quotaBackoffUntil = Number(PropertiesService.getScriptProperties().getProperty(quotaBackoffKey_(config)) || 0);
+    if (quotaBackoffUntil && Date.now() < quotaBackoffUntil) return;
+    var isBackfill = Boolean(config.syncRequestedAt || !config.historyId);
+    if (isBackfill) {
+      var batch = gmailLookbackBatch_(config);
+      var backfillMetadata = batch.metadata;
+      var messages = backfillMetadata.filter(function(item) { return !item.isSent && passesRules_(item, config.mailboxAddress, config.filters); }).map(stripSentFlag_);
+      var threadSnapshots = monitorSnapshotsFor_(backfillMetadata, config);
+      sendIngestBatches_(messages, threadSnapshots, batch.done ? batch.historyId : null, batch.done);
+      if (batch.done) clearBackfillState_(config);
+      clearQuotaBackoff_(config);
+      return;
+    }
+
+    var changes = gmailChangesSince_(config.historyId);
     var messageIds = changes.messageIds || [];
-    // A manual sync (and the first sync for a new connector) also backfills
-    // the configured window. Incremental history sync remains the fast path
-    // on the scheduled runs that follow.
-    var backfillMetadata = config.syncRequestedAt || !config.historyId ? gmailMessagesFromLookback_(config.monitor && config.monitor.lookbackDays) : [];
-    var changedMetadata = backfillMetadata.concat(messageIds.map(function(id) { return gmailMetadata_(id, true); }).filter(Boolean));
+    var changedMetadata = messageIds.map(function(id) { return gmailMetadata_(id, true); }).filter(Boolean);
     var seenMetadata = {};
     changedMetadata = changedMetadata.filter(function(item) { if (seenMetadata[item.gmailMessageId]) return false; seenMetadata[item.gmailMessageId] = true; return true; });
-    var messages = changedMetadata.filter(function(item) { return !item.isSent && passesRules_(item, config.mailboxAddress, config.filters); }).map(function(item) { var copy = {}; Object.keys(item).forEach(function(key) { if (key !== "isSent") copy[key] = item[key]; }); return copy; });
-    var threadIds = uniqueValues_(changedMetadata.map(function(item) { return item.gmailThreadId; }));
-    var threadSnapshots = threadIds.map(gmailThreadMetadata_).filter(Boolean);
-    if (!messages.length && !threadSnapshots.length) { taskflowRequest_("ingest", "post", { historyId: changes.historyId, emails: [], threadSnapshots: [] }); return; }
-    var emailChunks = chunkValues_(messages, 50), snapshotChunks = chunkValues_(threadSnapshots, 50), batchCount = Math.max(emailChunks.length, snapshotChunks.length);
-    for (var batchIndex = 0; batchIndex < batchCount; batchIndex++) {
-      var isLast = batchIndex + 1 === batchCount;
-      taskflowRequest_("ingest", "post", { historyId: isLast ? changes.historyId : undefined, emails: emailChunks[batchIndex] || [], threadSnapshots: snapshotChunks[batchIndex] || [] });
-    }
+    var messages = changedMetadata.filter(function(item) { return !item.isSent && passesRules_(item, config.mailboxAddress, config.filters); }).map(stripSentFlag_);
+    var threadSnapshots = monitorSnapshotsFor_(changedMetadata, config);
+    sendIngestBatches_(messages, threadSnapshots, changes.historyId, true);
+    clearQuotaBackoff_(config);
   } catch (error) {
     try { taskflowRequest_("ingest", "post", { historyId: config && config.historyId, emails: [], error: String(error && error.message || error).slice(0, 500) }); } catch (_) {}
+    if (isGmailQuotaError_(error) && config) {
+      PropertiesService.getScriptProperties().setProperty(quotaBackoffKey_(config), String(Date.now() + GMAIL_QUOTA_BACKOFF_MS_));
+      return;
+    }
     throw error;
   }
 }
 
-function gmailMessagesFromLookback_(lookbackDays) {
-  var days = Math.max(1, Math.min(90, Number(lookbackDays) || 30)), cutoff = Date.now() - days * 86400000, metadata = [], pageToken;
-  do {
+function gmailLookbackBatch_(config) {
+  var properties = PropertiesService.getScriptProperties(), key = "TASKFLOW_BACKFILL_" + config.connectorId;
+  var days = Math.max(1, Math.min(90, Number(config.monitor && config.monitor.lookbackDays) || 30));
+  var syncKey = String(config.syncRequestedAt || "initial");
+  var state = null;
+  try { state = JSON.parse(properties.getProperty(key) || "null"); } catch (_) {}
+  if (!state || state.syncKey !== syncKey || state.lookbackDays !== days) {
+    state = { syncKey: syncKey, lookbackDays: days, cutoff: Date.now() - days * 86400000, pageToken: null, pendingIds: [], pageHasRecent: false, exhausted: false, historyId: String(config.historyId || Gmail.Users.getProfile("me").historyId) };
+  }
+  if (!state.pendingIds.length && !state.exhausted) {
     // Do not pass q here: this connector intentionally uses the Gmail
     // metadata scope, and Gmail rejects search queries with that scope.
-    var response = Gmail.Users.Messages.list("me", { maxResults: 500, pageToken: pageToken }), pageHasRecent = false;
-    (response.messages || []).forEach(function(message) {
-      if (!message || !message.id) return;
-      var item = gmailMetadata_(message.id, true);
-      if (item && new Date(item.receivedAt).getTime() >= cutoff) { metadata.push(item); pageHasRecent = true; }
-    });
-    pageToken = response.nextPageToken;
-    if (!pageHasRecent) pageToken = null;
-  } while (pageToken);
-  return metadata;
+    var options = { maxResults: BACKFILL_PAGE_SIZE_ };
+    if (state.pageToken) options.pageToken = state.pageToken;
+    var response = Gmail.Users.Messages.list("me", options);
+    state.pendingIds = (response.messages || []).map(function(message) { return message && message.id; }).filter(Boolean);
+    state.pageToken = response.nextPageToken || null;
+    state.pageHasRecent = false;
+    if (!state.pendingIds.length) state.exhausted = true;
+  }
+  var ids = state.pendingIds.splice(0, BACKFILL_BATCH_SIZE_), metadata = [];
+  ids.forEach(function(id) {
+    var item = gmailMetadata_(id, true);
+    if (item && new Date(item.receivedAt).getTime() >= state.cutoff) { metadata.push(item); state.pageHasRecent = true; }
+  });
+  if (!state.pendingIds.length && (!state.pageHasRecent || !state.pageToken)) state.exhausted = true;
+  var done = state.exhausted && !state.pendingIds.length;
+  if (done) properties.deleteProperty(key); else properties.setProperty(key, JSON.stringify(state));
+  return { metadata: metadata, done: done, historyId: state.historyId };
+}
+
+function clearBackfillState_(config) { PropertiesService.getScriptProperties().deleteProperty("TASKFLOW_BACKFILL_" + config.connectorId); }
+function quotaBackoffKey_(config) { return "TASKFLOW_GMAIL_QUOTA_BACKOFF_" + config.connectorId; }
+function clearQuotaBackoff_(config) { PropertiesService.getScriptProperties().deleteProperty(quotaBackoffKey_(config)); }
+function isGmailQuotaError_(error) { return /quota exceeded|userRateLimitExceeded|rate limit|too many requests|units per minute/i.test(String(error && error.message || error)); }
+function stripSentFlag_(item) { var copy = {}; Object.keys(item).forEach(function(key) { if (key !== "isSent") copy[key] = item[key]; }); return copy; }
+
+function sendIngestBatches_(messages, threadSnapshots, historyId, complete) {
+  var emailChunks = chunkValues_(messages, 50), snapshotChunks = chunkValues_(threadSnapshots, 50), batchCount = Math.max(emailChunks.length, snapshotChunks.length, 1);
+  for (var batchIndex = 0; batchIndex < batchCount; batchIndex++) {
+    var isLast = batchIndex + 1 === batchCount;
+    taskflowRequest_("ingest", "post", { historyId: isLast && complete ? historyId : undefined, syncComplete: isLast && complete, emails: emailChunks[batchIndex] || [], threadSnapshots: snapshotChunks[batchIndex] || [] });
+  }
+}
+
+function monitorSnapshotsFor_(metadata, config) {
+  if (!config.monitor || !config.monitor.enabled) return [];
+  var target = String(config.mailboxAddress || "").toLowerCase(), responders = (config.monitor.responderEmails || []).map(function(value) { return String(value || "").toLowerCase(); });
+  var threadIds = uniqueValues_(metadata.filter(function(item) {
+    var recipients = (item.toAddresses || []).concat(item.ccAddresses || []).map(function(value) { return String(value || "").toLowerCase(); });
+    return recipients.indexOf(target) >= 0 || responders.indexOf(String(item.senderAddress || "").toLowerCase()) >= 0;
+  }).map(function(item) { return item.gmailThreadId; }));
+  return threadIds.map(function(threadId) {
+    var snapshot = gmailThreadMetadata_(threadId);
+    if (!snapshot) return null;
+    snapshot.messages = snapshot.messages.filter(function(message) { return !excludedByRules_(message, config.filters) && !monitorMessageExcluded_(message, config.monitor); });
+    return snapshot.messages.length ? snapshot : null;
+  }).filter(Boolean);
+}
+
+function monitorMessageExcluded_(message, monitor) {
+  var sender = String(message.senderAddress || "").toLowerCase();
+  if ((monitor.excludedSenderEmails || []).some(function(value) { return sender === String(value || "").toLowerCase(); })) return true;
+  var subject = String(message.subject || "").toLowerCase();
+  return (monitor.excludedSubjectKeywords || []).some(function(value) { return subject.indexOf(String(value || "").toLowerCase()) >= 0; });
+}
+
+function excludedByRules_(email, rules) {
+  var recipients = (email.toAddresses || []).concat(email.ccAddresses || []).map(function(value) { return String(value || "").toLowerCase(); });
+  var byField = { SENDER: [String(email.senderAddress || "").toLowerCase()], RECIPIENT: recipients };
+  return ["SENDER", "RECIPIENT"].some(function(field) { return (rules || []).some(function(rule) { return rule.action === "EXCLUDE" && rule.field === field && byField[field].some(function(address) { return ruleMatches_(address, rule); }); }); });
 }
 
 function gmailChangesSince_(historyId) {

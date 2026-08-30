@@ -35,7 +35,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ con
           });
         }
       }
-      await tx.emailConnector.update({ where: { id: connector.id }, data: { historyId: input.historyId, lastHeartbeatAt: now, lastSyncAt: now, lastError: null, syncRequestedAt: null } });
+      await tx.emailConnector.update({ where: { id: connector.id }, data: { lastHeartbeatAt: now, lastError: null, ...(input.syncComplete ? { historyId: input.historyId, lastSyncAt: now, syncRequestedAt: null } : {}) } });
       return created.count;
     });
     return Response.json({ accepted: result, filtered: input.emails.length - accepted.length, duplicates: accepted.length - result });

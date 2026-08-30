@@ -6,10 +6,10 @@ const code = readFileSync(new URL("../integrations/google-apps-script/Code.gs", 
 
 test("Apps Script manual sync requests the configured lookback window", () => {
   assert.match(code, /syncRequestedAt \|\| !config\.historyId/);
-  assert.match(code, /gmailMessagesFromLookback_\(config\.monitor && config\.monitor\.lookbackDays\)/);
-  assert.match(code, /Gmail\.Users\.Messages\.list\("me", \{ maxResults: 500, pageToken: pageToken \}\)/);
+  assert.match(code, /gmailLookbackBatch_\(config\)/);
+  assert.match(code, /var BACKFILL_PAGE_SIZE_ = 100/);
   assert.doesNotMatch(code, /q: "newer_than:/);
-  assert.match(code, /new Date\(item\.receivedAt\)\.getTime\(\) >= cutoff/);
+  assert.match(code, /new Date\(item\.receivedAt\)\.getTime\(\) >= state\.cutoff/);
 });
 
 test("Apps Script isolates unavailable Gmail messages from the full mailbox sync", () => {
@@ -26,4 +26,16 @@ test("Apps Script batches emails and thread snapshots within the ingest API limi
   assert.match(code, /var emailChunks = chunkValues_\(messages, 50\)/);
   assert.match(code, /snapshotChunks = chunkValues_\(threadSnapshots, 50\)/);
   assert.match(code, /threadSnapshots: snapshotChunks\[batchIndex\] \|\| \[\]/);
+});
+
+test("Apps Script prevents overlapping syncs and resumes quota-safe lookback batches", () => {
+  assert.match(code, /LockService\.getScriptLock\(\)/);
+  assert.match(code, /TASKFLOW_BACKFILL_/);
+  assert.match(code, /syncComplete: isLast && complete/);
+  assert.match(code, /GMAIL_QUOTA_BACKOFF_MS_ = 5 \* 60 \* 1000/);
+});
+
+test("Apps Script only fetches thread snapshots when reply monitoring is enabled", () => {
+  assert.match(code, /if \(!config\.monitor \|\| !config\.monitor\.enabled\) return \[\];/);
+  assert.match(code, /snapshot\.messages = snapshot\.messages\.filter/);
 });
