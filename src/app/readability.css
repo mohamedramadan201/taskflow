@@ -992,6 +992,17 @@ body .status-select.status-done,
 body .status-select[data-status="DONE"] { border-color:#79b48a; background:#e5f4e8; color:#2f6e43; }
 body .status-select.status-no-action-needed,
 body .status-select[data-status="NO_ACTION_NEEDED"] { border-color:#e1a06c; background:#fff0e3; color:#96511f; }
+
+/* Keep long Merch task content contained inside its own Kanban column. */
+body .board { min-width:0; }
+body .board .column { min-width:0; overflow:hidden; }
+body .board .cards { min-width:0; }
+body .board .task-card { width:100%; min-width:0; max-width:100%; overflow:hidden; box-sizing:border-box; }
+body .board .task-card h3,
+body .board .task-card p,
+body .board .task-card .task-meta { min-width:0; overflow-wrap:anywhere; }
+body .email-actions .danger,
+body .email-bulk-toolbar .danger { color:var(--danger); }
 body .priority-select.priority-low { border-color:#cbd2ce; background:#f0f3f1; color:#58635f; }
 body .priority-select.priority-medium { border-color:#e0b962; background:#fff0ca; color:#74561b; }
 body .priority-select.priority-high,
