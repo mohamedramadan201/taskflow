@@ -1,5 +1,11 @@
 import { execFileSync } from "node:child_process";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import pg from "pg";
+
+const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const prismaCli = resolve(projectRoot, "node_modules", "prisma", "build", "index.js");
+const runPrisma = (args) => execFileSync(process.execPath, [prismaCli, ...args], { cwd: projectRoot, stdio: "inherit" });
 
 const isProductionDeployment = process.env.VERCEL === "1" && process.env.VERCEL_ENV === "production";
 const explicitlyEnabled = process.env.RUN_DB_MIGRATIONS === "true";
@@ -36,7 +42,7 @@ try {
 
   const resolveAsApplied = (migrationName) => {
     console.log(`Repairing already-present schema state for ${migrationName}...`);
-    execFileSync("pnpm", ["exec", "prisma", "migrate", "resolve", "--applied", migrationName], { stdio: "inherit" });
+    runPrisma(["migrate", "resolve", "--applied", migrationName]);
   };
 
   const result = await client.query(`
@@ -311,4 +317,4 @@ try {
   await client.end();
 }
 
-execFileSync("pnpm", ["exec", "prisma", "migrate", "deploy"], { stdio: "inherit" });
+runPrisma(["migrate", "deploy"]);
