@@ -57,6 +57,12 @@ export async function taskVisibilityWhere(workspaceId: string, userId: string, u
 
 export async function assertEmailVisible(emailId: string, workspaceId: string, userId: string, userEmail: string) {
   const where = await emailVisibilityWhere(workspaceId, userId, userEmail);
-  const visible = await prisma.inboundEmail.findFirst({ where: { id: emailId, ...where }, select: { id: true } });
+  const visible = await prisma.inboundEmail.findFirst({ where: { AND: [{ id: emailId }, where] }, select: { id: true } });
   if (!visible) throw new HttpError(403, "You do not have access to this email");
+}
+
+export async function assertTaskVisible(taskId: string, workspaceId: string, userId: string, userEmail: string) {
+  const where = await taskVisibilityWhere(workspaceId, userId, userEmail);
+  const visible = await prisma.task.findFirst({ where: { AND: [{ id: taskId }, where] }, select: { id: true } });
+  if (!visible) throw new HttpError(404, "Task not found");
 }
