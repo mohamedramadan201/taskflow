@@ -10,7 +10,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ema
     if (!email) throw new HttpError(404, "Email not found");
     const access = await requireMembership(email.workspaceId);
     assertPermission(access.subject, "EMAIL_TRIAGE");
-    await assertEmailVisible(email.workspaceId, access.user.id, access.user.email, emailId);
+    await assertEmailVisible(emailId, email.workspaceId, access.user.id, access.user.email);
     const input = await parseJson(request, emailLinkSchema);
     const visibleTasks = await taskVisibilityWhere(email.workspaceId, access.user.id, access.user.email);
     const task = await prisma.task.findFirst({ where: { AND: [{ id: input.taskId, workspaceId: email.workspaceId }, visibleTasks] }, select: { id: true, title: true } });
