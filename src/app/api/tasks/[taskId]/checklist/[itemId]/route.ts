@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { assertPermission, HttpError, errorResponse, requireMembership } from "@/lib/server/authorization";
+import { assertTaskVisible } from "@/lib/server/record-access";
 import { prisma } from "@/lib/server/prisma";
 import { parseJson } from "@/lib/validation";
 
@@ -9,6 +10,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
     const task = await prisma.task.findUnique({ where: { id: taskId }, select: { workspaceId: true } });
     if (!task) throw new HttpError(404, "Task not found");
     const access = await requireMembership(task.workspaceId);
+    await assertTaskVisible(taskId, task.workspaceId, access.user.id, access.user.email);
     assertPermission(access.subject, "TASK_CHECKLIST", "Checklist modification denied");
     const existing = await prisma.checklistItem.findFirst({ where: { id: itemId, taskId }, select: { id: true } });
     if (!existing) throw new HttpError(404, "Checklist item not found");
