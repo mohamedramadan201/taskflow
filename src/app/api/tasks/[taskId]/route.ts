@@ -40,8 +40,20 @@ export async function GET(_: Request, { params }: { params: Promise<{ taskId: st
       },
     });
     if (!detail) throw new HttpError(404, "Task not found");
-    const { labelAssignments, ...task } = detail;
-    return Response.json({ ...task, labels: labelAssignments.map(({ label }) => label) });
+
+    const visibleEmailIds = new Set(detail.sourceEmails.map((email) => email.id));
+    const activities = detail.activities.map((activity) => {
+      const details = activity.detailsJson;
+      if (!details || typeof details !== "object" || Array.isArray(details)) return activity;
+      const record = details as Record<string, unknown>;
+      const emailId = typeof record.emailId === "string" ? record.emailId : null;
+      if (!emailId || visibleEmailIds.has(emailId)) return activity;
+      const { emailSubject: _emailSubject, senderAddress: _senderAddress, mailboxAddress: _mailboxAddress, ...safeDetails } = record;
+      return { ...activity, detailsJson: { ...safeDetails, emailId: undefined, privateEmail: true } };
+    });
+
+    const { labelAssignments, activities: _activities, ...task } = detail;
+    return Response.json({ ...task, activities, labels: labelAssignments.map(({ label }) => label) });
   } catch (e) { return errorResponse(e); }
 }
 
