@@ -1,11 +1,12 @@
 import { assertPermission, HttpError, errorResponse, requireMembership } from "@/lib/server/authorization";
+import { assertEmailVisible } from "@/lib/server/record-access";
 import { prisma } from "@/lib/server/prisma";
 import { emailActionSchema, parseJson } from "@/lib/validation";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ emailId: string }> }) {
   try {
     const { emailId } = await params; const email = await prisma.inboundEmail.findUnique({ where: { id: emailId }, select: { workspaceId: true, connectorId: true, gmailThreadId: true, status: true } }); if (!email) throw new HttpError(404, "Email not found");
-    const access = await requireMembership(email.workspaceId); assertPermission(access.subject, "EMAIL_TRIAGE"); const input = await parseJson(request, emailActionSchema);
+    const access = await requireMembership(email.workspaceId); assertPermission(access.subject, "EMAIL_TRIAGE"); await assertEmailVisible(emailId, email.workspaceId, access.user.id, access.user.email); const input = await parseJson(request, emailActionSchema);
     if (email.status === "CONVERTED") throw new HttpError(409, "Converted emails cannot be moved");
     const handled = input.status === "DISMISSED" || input.status === "NO_ACTION_NEEDED";
     const updated = await prisma.$transaction(async (tx) => {
@@ -22,7 +23,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ em
 export async function DELETE(_: Request, { params }: { params: Promise<{ emailId: string }> }) {
   try {
     const { emailId } = await params; const email = await prisma.inboundEmail.findUnique({ where: { id: emailId }, select: { workspaceId: true, status: true, subject: true } }); if (!email) throw new HttpError(404, "Email not found");
-    const access = await requireMembership(email.workspaceId); assertPermission(access.subject, "EMAIL_TRIAGE");
+    const access = await requireMembership(email.workspaceId); assertPermission(access.subject, "EMAIL_TRIAGE"); await assertEmailVisible(emailId, email.workspaceId, access.user.id, access.user.email);
     if (email.status === "CONVERTED") throw new HttpError(409, "Converted emails cannot be deleted because they are linked to task history");
     await prisma.$transaction(async (tx) => {
       const deleted = await tx.inboundEmail.deleteMany({ where: { id: emailId, workspaceId: email.workspaceId, status: { not: "CONVERTED" } } });

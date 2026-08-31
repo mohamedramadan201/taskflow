@@ -5,6 +5,7 @@ import { BoardClient } from "@/components/board-client";
 import { buildWorkspaceActionCenter } from "@/lib/reporting";
 import { hasPermission } from "@/lib/permissions";
 import { listUserWorkspaces, requireWorkspaceBySlug } from "@/lib/server/authorization";
+import { taskVisibilityWhere } from "@/lib/server/record-access";
 import { prisma } from "@/lib/server/prisma";
 const BOARD_PAGE_SIZE = 100;
 
@@ -17,8 +18,9 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const slug = (await searchParams).workspace || userWorkspaces[0]?.slug;
   if (!slug) redirect("/login?error=no-workspace");
   const { workspace, role, subject } = await requireWorkspaceBySlug(slug, { id: session.user.id, email: session.user.email });
+  const visibleTasks = await taskVisibilityWhere(workspace.id, session.user.id, session.user.email);
   const [taskPage, members, labels, savedViews] = await Promise.all([
-    prisma.task.findMany({ where: { workspaceId: workspace.id }, select: boardTaskSelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: BOARD_PAGE_SIZE + 1 }),
+    prisma.task.findMany({ where: visibleTasks, select: boardTaskSelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: BOARD_PAGE_SIZE + 1 }),
     prisma.workspaceMember.findMany({ where: { workspaceId: workspace.id, suspendedAt: null }, include: { user: { select: { id: true, name: true, email: true } }, teamGroup: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } }),
     prisma.taskLabel.findMany({ where: { workspaceId: workspace.id }, orderBy: { name: "asc" } }),
     prisma.savedTaskView.findMany({ where: { workspaceId: workspace.id, OR: [{ userId: session.user.id }, { shared: true }] }, orderBy: [{ shared: "desc" }, { name: "asc" }] }),
