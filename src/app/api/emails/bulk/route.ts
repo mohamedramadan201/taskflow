@@ -1,4 +1,5 @@
 import { assertPermission, HttpError, errorResponse, requireMembership } from "@/lib/server/authorization";
+import { emailVisibilityWhere } from "@/lib/server/record-access";
 import { prisma } from "@/lib/server/prisma";
 import { emailBulkActionSchema, parseJson } from "@/lib/validation";
 
@@ -7,25 +8,32 @@ export async function POST(request: Request) {
     const input = await parseJson(request, emailBulkActionSchema);
     const requestedWorkspaceId = input.workspaceId;
     if (input.selectAll && !requestedWorkspaceId) throw new HttpError(400, "Workspace selection is required");
-    const emails = await prisma.inboundEmail.findMany({
-      where: input.selectAll ? { workspaceId: requestedWorkspaceId!, status: "UNTRIAGED" } : { id: { in: input.emailIds } },
-      select: { id: true, workspaceId: true, status: true, subject: true },
-    });
-    if (!emails.length) throw new HttpError(404, "No matching emails were found");
-    if (!input.selectAll && emails.length !== input.emailIds!.length) throw new HttpError(404, "One or more emails could not be found");
-    const workspaceId = emails[0].workspaceId;
-    if (input.selectAll && workspaceId !== requestedWorkspaceId) throw new HttpError(400, "Workspace selection is invalid");
-    if (emails.some((email) => email.workspaceId !== workspaceId)) throw new HttpError(400, "Emails must belong to one workspace");
-    const selectedEmailIds = emails.map((email) => email.id);
+
+    let workspaceId = requestedWorkspaceId;
+    if (!workspaceId && input.emailIds?.length) {
+      const first = await prisma.inboundEmail.findUnique({ where: { id: input.emailIds[0] }, select: { workspaceId: true } });
+      if (!first) throw new HttpError(404, "One or more emails could not be found");
+      workspaceId = first.workspaceId;
+    }
+    if (!workspaceId) throw new HttpError(400, "Workspace selection is required");
+
     const access = await requireMembership(workspaceId);
     assertPermission(access.subject, "EMAIL_TRIAGE");
+    const visibleEmails = await emailVisibilityWhere(workspaceId, access.user.id, access.user.email);
+    const selection = input.selectAll
+      ? { AND: [visibleEmails, { status: "UNTRIAGED" as const }] }
+      : { AND: [visibleEmails, { id: { in: input.emailIds! } }] };
+    const emails = await prisma.inboundEmail.findMany({ where: selection, select: { id: true, workspaceId: true, status: true, subject: true } });
+    if (!emails.length) throw new HttpError(404, "No matching emails were found");
+    if (!input.selectAll && emails.length !== input.emailIds!.length) throw new HttpError(404, "One or more emails could not be found or are not accessible");
+    if (emails.some((email) => email.workspaceId !== workspaceId)) throw new HttpError(400, "Emails must belong to one workspace");
+    const selectedEmailIds = emails.map((email) => email.id);
     if (emails.some((email) => email.status === "CONVERTED")) throw new HttpError(409, "Converted emails cannot be moved in bulk");
 
     if (input.action === "DELETE") {
-      if (emails.some((email) => email.status === "CONVERTED")) throw new HttpError(409, "Converted emails cannot be deleted because they are linked to task history");
       const deleted = await prisma.$transaction(async (tx) => {
         const result = await tx.inboundEmail.deleteMany({ where: { id: { in: selectedEmailIds }, workspaceId, status: { not: "CONVERTED" } } });
-        if (result.count) await tx.activityEvent.createMany({ data: emails.slice(0, result.count).map((email) => ({ workspaceId, actorUserId: access.user.id, type: "INBOUND_EMAIL_DELETED", detailsJson: { emailId: email.id, emailSubject: email.subject } })) });
+        if (result.count) await tx.activityEvent.createMany({ data: emails.slice(0, result.count).map((email) => ({ workspaceId: workspaceId!, actorUserId: access.user.id, type: "INBOUND_EMAIL_DELETED", detailsJson: { emailId: email.id, emailSubject: email.subject } })) });
         return result;
       });
       return Response.json({ count: deleted.count, action: input.action });
@@ -48,5 +56,7 @@ export async function POST(request: Request) {
     const handled = status !== "UNTRIAGED";
     const updated = await prisma.inboundEmail.updateMany({ where: { id: { in: selectedEmailIds }, workspaceId, status: { not: "CONVERTED" } }, data: { status, handledAt: handled ? new Date() : null, handledByUserId: handled ? access.user.id : null } });
     return Response.json({ count: updated.count, action: input.action });
-  } catch (error) { return errorResponse(error); }
+  } catch (error) {
+    return errorResponse(error);
+  }
 }
