@@ -18,7 +18,7 @@ export default async function EmailsPage({ searchParams }: { searchParams: Promi
     canManage ? prisma.emailConnector.findMany({ where: { workspaceId: access.workspace.id }, omit: { tokenHash: true }, include: { filters: { orderBy: { createdAt: "asc" } }, _count: { select: { emails: true } } }, orderBy: { createdAt: "asc" } }) : Promise.resolve([]),
     prisma.workspaceMember.findMany({ where: { workspaceId: access.workspace.id, suspendedAt: null }, select: { role: true, user: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: "asc" } }),
     prisma.task.findMany({ where: visibleTasks, select: { id: true, title: true, status: true }, orderBy: { updatedAt: "desc" }, take: 200 }),
-    prisma.emailMonitorThread.findMany({ where: { workspaceId: access.workspace.id, connector: visibleEmails.connector }, select: { connectorId: true, gmailThreadId: true, status: true, latestRelevantSenderAddress: true, latestRelevantMessageAt: true, latestExternalMessageAt: true, slaDueAt: true, priority: true, agingBucket: true } }),
+    prisma.emailMonitorThread.findMany({ where: { workspaceId: access.workspace.id, connector: { emails: { some: visibleEmails } } }, select: { connectorId: true, gmailThreadId: true, status: true, latestRelevantSenderAddress: true, latestRelevantMessageAt: true, latestExternalMessageAt: true, slaDueAt: true, priority: true, agingBucket: true } }),
     prisma.inboundEmail.findMany({ where: { ...visibleEmails, taskId: { not: null } }, select: { connectorId: true, gmailThreadId: true, taskId: true, task: { select: { id: true, title: true, status: true } } } }),
     prisma.inboundEmail.groupBy({ where: visibleEmails, by: ["status"], _count: { _all: true } }),
   ]);
