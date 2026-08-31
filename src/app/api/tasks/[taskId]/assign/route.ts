@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { buildEmailDeliverySubject } from "@/lib/email-delivery";
 import { deliverAssignmentNotification } from "@/lib/server/notification-service";
 import { HttpError, errorResponse, requireMembership } from "@/lib/server/authorization";
+import { assertTaskVisible } from "@/lib/server/record-access";
 import { prisma } from "@/lib/server/prisma";
 import { parseJson, taskAssignmentSchema } from "@/lib/validation";
 
@@ -11,6 +12,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tas
     const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, title: true, workspaceId: true, assigneeUserId: true } });
     if (!task) throw new HttpError(404, "Task not found");
     const { user } = await requireMembership(task.workspaceId);
+    await assertTaskVisible(taskId, task.workspaceId, user.id, user.email);
     const target = await prisma.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: task.workspaceId, userId: input.assigneeUserId } }, select: { userId: true, suspendedAt: true, user: { select: { email: true } } } });
     if (!target || target.suspendedAt) throw new HttpError(400, "Assignee must be an active member of this workspace");
     const result = await prisma.$transaction(async (tx) => {
